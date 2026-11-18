@@ -284,3 +284,25 @@ No se reincorporan persistencia, reintentos automáticos, recuperación avanzada
   - `editIncident` rechaza sin cambiar nada una categoría no visible o un protocolo desconocido.
   - `retryReport` no reintenta `invalid_input`.
   - `src/domain/` solo importa constantes de `src/data/`; la tabla de estructura del diseño lo dice así.
+
+## Fase 2 (IA y servidor): estado
+
+**Hecho** (100 tests en verde, `typecheck` y `build` sin errores):
+- **Archivos:** 9 (`src/data/burst-script.ts`), 15 (`src/ai/contract.ts`), 16 (`src/ai/prompt.ts`), 17 (`src/server/llm-client.ts`, con `@ai-sdk/google`), 18 (`src/server/triage-report.ts`, pasos 1 a 9) y el test 33 (`src/ai/contract.test.ts`).
+- **Actualizados:** `.env.example` (con `GOOGLE_GENERATIVE_AI_API_KEY`) y el botón temporal de `src/routes/index.tsx`, que ahora envía el contexto completo de S1 y muestra la decisión traducida a IDs reales.
+- **Dependencia:** `@ai-sdk/google` 4.0.122, versión exacta y compatible con `ai` 7.0.176 (comparten `@ai-sdk/provider` 4.0.39).
+- **Verificado con el SDK real y un modelo simulado:** un `abortSignal` vencido llega como `TimeoutError` (→ `timeout`) y una salida que no cumple el esquema como `NoObjectGeneratedError` (→ `invalid_output`). Ya están como tests.
+
+**Pendiente, por falta de una clave de Google:**
+- la llamada real a Gemini con S1;
+- la elección del modelo según su disponibilidad y su cuota en el nivel gratuito;
+- si el esquema con campos `null` lo admite el modelo elegido;
+- configurar `GOOGLE_GENERATIVE_AI_API_KEY` y `TRIAGE_MODEL` en Vercel y desplegar.
+
+Hasta entonces, la condición de salida de la fase 2 se cumple en la parte del test 33 y queda sin cumplir en la llamada real. No se ha configurado ninguna variable ni se ha desplegado nada.
+
+**Decisiones de implementación que el diseño dejaba abiertas:**
+- La petición del cliente es el `TriageInput` completo más la contraseña; el servidor la valida con Zod (`parseTriageRequest`, en `contract.ts` para poder testearla).
+- La contraseña se lee de la petición sin validar antes del paso 2, de modo que una contraseña incorrecta siempre da `unauthorized` aunque el resto de la entrada sea inválida.
+- `GOOGLE_GENERATIVE_AI_API_KEY` o `TRIAGE_MODEL` ausentes dan `server` (error de configuración), no `unauthorized`.
+- El test de clasificación de errores y los del prompt están dentro de `contract.test.ts`, sin crear archivos de test nuevos.

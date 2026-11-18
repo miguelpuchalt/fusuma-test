@@ -729,14 +729,16 @@ Los nombres concretos de funciones y opciones que dependen de la versión no se 
 
 | Dato | Valor |
 |---|---|
-| Versiones de `@tanstack/react-start`, `ai` y `zod` | `@tanstack/react-start` 1.169.5, `ai` 7.0.176, `zod` 4.6.7 (importado desde `"zod"`; el peer de `ai` admite `^3.25.76 || ^4.1.8`). También `nitro` 3.0.260610-beta, `vite` 8.3.8, `typescript` 6.0.3, `react` 19.3.1. Todas exactas, sin `^` ni `~`. |
-| Función de salida estructurada y nombre de la opción de tokens | `generateText` con `output: Output.object({ schema })`. En `ai` 7 `generateObject` está marcada `@deprecated`. Tokens: `maxOutputTokens`. Razonamiento: `reasoning: 'none'`. Además `maxRetries: 0` y `abortSignal`. El validador de la Server Function se llama `.validator(fn)` (no `inputValidator`). |
+| Versiones de `@tanstack/react-start`, `ai` y `zod` | `@tanstack/react-start` 1.169.5, `ai` 7.0.176, `zod` 4.6.7 (importado desde `"zod"`; el peer de `ai` admite `^3.25.76 || ^4.1.8`). Fase 2: `@ai-sdk/google` 4.0.122 (comparte `@ai-sdk/provider` 4.0.39 con `ai`; peer de `zod` `^3.25.76 || ^4.1.8`) y `vitest` 5.1.1; `zustand` llega en la fase 3. También `nitro` 3.0.260610-beta, `vite` 8.3.8, `typescript` 6.0.3, `react` 19.3.1. Todas exactas, sin `^` ni `~`. |
+| Función de salida estructurada y nombre de la opción de tokens | `generateText` con `output: Output.object({ schema })`. En `ai` 7 `generateObject` está marcada `@deprecated`. Tokens: `maxOutputTokens`. Razonamiento: `reasoning: 'none'`, que `@ai-sdk/google` traduce a `thinkingBudget: 0` en los modelos Gemini 2.5 que lo admiten (leído en el código del proveedor). Además `maxRetries: 0` y `abortSignal`. El validador de la Server Function se llama `.validator(fn)` (no `inputValidator`). |
 | Comprobadores de error (timeout, 429, salida que no cumple el esquema) | `error.name` `TimeoutError` o `AbortError`; `APICallError.isInstance(e) && e.statusCode === 429`; `NoObjectGeneratedError.isInstance(e)`. Todos se importan de `ai`. |
 | Dónde se configura `maxDuration` y valor que muestra Vercel | `vite.config.ts`: `nitro({ vercel: { functions: { maxDuration: 30 } } })`. Comprobado en el despliegue: la función `__server` tiene `timeout: 30`, runtime `nodejs24.x`, 2048 MB. No hace falta `vercel.json` para esto (el de la plantilla solo declara `framework`). |
 | Carpeta de salida del bundle del cliente | `.output/public` en el build local (preset de Node); en Vercel el build lo hace la plataforma. La verificación 3 se hace sobre `.output/public`. |
 | Saldo gratuito y modelos elegibles (AI Gateway) | Saldo informado por `gateway.getCredits()`: 0 (total usado 0). Hay 5 modelos de lenguaje con precio 0: `nvidia/nemotron-3.5-lightning-free`, `reflection/beam`, `humansand/ampersand-v0.1`, `stealth/glyph-cluster` y `recursive/flint-v1.0`. **Los 5 devuelven 403: AI Gateway exige una tarjeta de crédito registrada para desbloquear los créditos gratuitos.** No se ha añadido ninguna tarjeta. |
 | `TRIAGE_MODEL` elegido y opción de razonamiento usada | **Ninguno verificado.** El valor provisional de Vercel y de `.env.local` (`nvidia/nemotron-3.5-lightning-free`, un ID de AI Gateway) deja de servir. Se fija un modelo Gemini en la fase 2 tras comprobar disponibilidad y cuota. |
 | Respuesta, tokens y coste de la llamada con S1 | Sin respuesta del modelo: 403 del Gateway por falta de tarjeta. Coste 0 €. Desde la URL pública, `triageReport` devuelve `unauthorized` con una contraseña incorrecta (tras 1 s) y `server` con la correcta. |
+| **Fase 2:** disponibilidad y cuota del modelo Gemini gratuito | **Pendiente.** Hace falta una clave de Google AI Studio (sin facturación) en `GOOGLE_GENERATIVE_AI_API_KEY`. Se anotan el modelo elegido, sus límites por minuto y por día, y si admite el esquema con campos `null`. |
+| **Fase 2:** respuesta, tokens y latencia de la llamada con S1 | **Pendiente**, por lo mismo. El código, el prompt y los tests están hechos; falta la llamada real. |
 
 ### Estructura
 
@@ -760,7 +762,7 @@ Los nombres concretos de funciones y opciones que dependen de la versión no se 
    - **`tsconfig.json`:** `strict: true` y alias `@/*` → `src/*`, el que usa shadcn.
    - **`vite.config.ts`:** el despliegue en Vercel con Nitro y `maxDuration` se configuran como indique la guía oficial; si la guía exige otro archivo, se anota en el registro de la fase 0.
 2. **`components.json`** (Create con `npx shadcn init`, con el alias `@/*`).
-3. **`.env.example`** (Create): `GOOGLE_GENERATIVE_AI_API_KEY` (solo en el servidor; en Vercel, como variable sensible), `TRIAGE_MODEL` (ID del modelo Gemini fijado en la fase 2) y `DEMO_PASSWORD` (12 caracteres o más). La fase 0 lo creó con `AI_GATEWAY_API_KEY`; se actualiza en la fase 2.
+3. **`.env.example`** (Create): `GOOGLE_GENERATIVE_AI_API_KEY` (solo en el servidor; en Vercel, como variable sensible), `TRIAGE_MODEL` (ID del modelo Gemini fijado en la fase 2) y `DEMO_PASSWORD` (12 caracteres o más). La fase 0 lo creó con `AI_GATEWAY_API_KEY`; la fase 2 lo actualizó.
 4. **`.gitignore`** (Modify, ya existe): se añaden `.env*` y `!.env.example`; se conserva el resto, que ya ignora `node_modules/`, `.output/`, `.vercel/` y `dist/`.
 37. **`src/lib/utils.ts`** (Create con `npx shadcn init`): `cn`, que usan los componentes de shadcn.
 38. **`src/routeTree.gen.ts`** (generado por el router de TanStack Start; se versiona para que `npm run typecheck` funcione en un clon limpio).
