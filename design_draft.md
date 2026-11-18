@@ -1,7 +1,7 @@
 # EmergencyTriage
 
 *   **Author:** JackElSimple
-*   **Status:** Draft
+*   **Status:** Approved (implementación pendiente de autorización explícita del autor)
 *   **Date:** 2026-11-18
 
 --------------------------------------------------------------------------------
@@ -13,6 +13,22 @@ EmergencyTriage es un prototipo de consola de operaciones para incidentes en edi
 Es la entrega de una prueba técnica de un proceso de selección, con un plazo de 2 días de unas 12 horas. Trabaja solo con datos ficticios y **no es un sistema real de gestión de emergencias**. Se presenta en directo en una entrevista técnica, donde el autor tiene que explicar cómo funciona por dentro, por qué tomó cada decisión y cómo llevaría el diseño a producción.
 
 Se construye con React, TypeScript, TanStack Start (con SSR), shadcn/ui, Vercel AI SDK y Vercel AI Gateway, y se despliega en Vercel Hobby. El objetivo de coste es 0 €. Este repositorio (`fusuma-test`) contiene el producto.
+
+### Relación con `concepts_brief.md`
+
+`concepts_brief.md` es el documento **histórico** de la primera versión del concepto y no se modifica. **Este documento es la especificación vigente para implementar.** Cuando los dos difieren, manda este. El autor confirmó explícitamente estas decisiones posteriores, que sustituyen o amplían el brief:
+
+| # | Decisión vigente | Qué cambia respecto al brief |
+|---|---|---|
+| 1 | La IA recibe todos los incidentes del mismo edificio, de cualquier planta y estado, con los textos completos de sus avisos. | **Sustituye a M8** (contexto compacto, sin avisos). Se acepta el coste en tokens para no depender de resúmenes incompletos o desactualizados. |
+| 2 | El contrato con la IA no tiene campo `confidence`. La duda se resuelve con «ante la duda, separar» y con `canJoin`/`canRelate`. | **Sustituye a la versión inicial de ADR-22.** |
+| 3 | Un destino que deja de estar `pending` durante la llamada: si pasó a `validated`, incidente nuevo relacionado; si pasó a `discarded` o ya no existe, incidente nuevo sin relación. `canRelate` es falso para los incidentes descartados. | **Matiza B1/B2** («destino cerrado → crear con relación»): la acción explícita de descartar prevalece sobre una propuesta de la IA iniciada con información anterior. |
+| 4 | Las respuestas pregrabadas referencian un **aviso ancla** (S1, S3…). En la ejecución se resuelve con el `incidentId` actual de ese aviso. | **Concreta ADR-17** (claves simbólicas) sin un mapa adicional de grupos a IDs. |
+| 5 | Zustand con el middleware `persist` para el estado del cliente. | **Amplía el brief**, que no decidía la gestión del estado en React. |
+| 6 | Funciones de dominio `canJoin` y `canRelate`, deterministas, compartidas por el saneado del servidor y por `applyDecision` en el cliente. | **Amplía el brief.** |
+| 7 | Contraseña de demo compartida (`DEMO_PASSWORD`), validada en el servidor. No hay cuentas ni autenticación individual. | **Amplía el brief**, que la dejaba como opcional (M4). |
+| 8 | Agrupación por edificio y planta como condición necesaria pero no suficiente; un `pending` de la misma planta no se puede relacionar. | **Amplía ADR-24.** |
+| 9 | El estado del incidente guarda `summaryLockedAtReportCount`. La categoría puede cambiar al agrupar si no está bloqueada. Al recargar, los avisos interrumpidos pasan a `error: interrupted`. | **Cierra preguntas abiertas** del brief. |
 
 ## The Problem
 
@@ -79,9 +95,9 @@ Estas reglas deben cumplirse siempre, sea cual sea el camino de escritura: IA re
 
 1. **Una sola fuente de verdad para la relación aviso-incidente.** `report.incidentId` es el único dato que relaciona un aviso con su incidente. Vale `null` mientras el aviso está en cola, procesándose o con error.
 2. **El incidente no guarda datos derivados.** No almacena la lista de avisos, el contador de avisos ni `lastReportAt`. Los tres se calculan a partir de los avisos:
-   - lista: avisos con `report.incidentId === incident.id`, ordenados por `timestamp`;
+   - lista: avisos con `report.incidentId === incident.id`, ordenados por `createdAt`;
    - contador: longitud de esa lista;
-   - `lastReportAt`: el `timestamp` máximo de esa lista.
+   - `lastReportAt`: el `createdAt` máximo de esa lista.
 3. **Un incidente existe solo si tiene avisos.** Todo incidente tiene al menos un aviso asignado. Se crea en la misma operación que asigna su primer aviso.
 4. **Mismo edificio y misma planta.** Todos los avisos de un incidente tienen el mismo edificio y la misma planta que el incidente. La planta la fija el primer aviso y no cambia. Coincidir en edificio y planta es **necesario pero no suficiente** para agrupar (ver «Política de agrupación»).
 5. **Los estados finales no cambian.** Un incidente `Validado` o `Descartado` no admite cambios de campos, ni avisos nuevos, ni cambios de estado.
@@ -136,7 +152,8 @@ El modo sin API reproduce exactamente estas agrupaciones. Con la IA real, una di
 - **No hay estado `Resuelto`.** `Validado` significa «protocolo aprobado», no «emergencia terminada». El estado `Resuelto` queda para la hoja de ruta.
 - **No se crean ni se borran categorías a mano.** «Cambiar categoría» solo elige entre las existentes, y las categorías no oficiales sin uso se ocultan, no se borran.
 - **No hay base de datos, Redis ni infraestructura externa.** El límite de peticiones en el servidor es parcial (por instancia) y se presenta así.
-- **No hay varios usuarios ni sincronización** entre pestañas o dispositivos, ni autenticación.
+- **No hay varios usuarios ni sincronización** entre pestañas o dispositivos.
+- **No hay cuentas ni autenticación de usuarios.** Solo hay una contraseña de demo compartida, validada en el servidor, para proteger las llamadas a la IA en la URL pública.
 - **No hay vista móvil del ocupante** ni avisos por audio.
 - **No hay registro de eventos (event sourcing).** Queda en la hoja de ruta junto con Postgres.
 - **No hay vista de arquitectura dentro de la app.** La documentación va en el README.
@@ -289,7 +306,7 @@ El *loader* de la ruta principal devuelve estas constantes, y el SSR las usa par
 
 #### 2. Modelo de datos del dominio
 
-Esquema en pseudocódigo. Los nombres del código van en inglés y los textos de la interfaz en español; el idioma de la interfaz y del prompt sigue en Open Questions.
+Esquema en pseudocódigo. Los nombres del código van en inglés. La interfaz, el prompt, el guion y el README van en español.
 
 ```text
 Severity      = "low" | "medium" | "high" | "critical"      // orden total: low < medium < high < critical
@@ -369,7 +386,7 @@ El esquema **no tiene campo `confidence`**: la duda se resuelve con la política
 
 Reglas entre campos, que se comprueban en el código después de validar con Zod:
 - `action = "join"` exige `targetRef`.
-- Debe venir exactamente uno de `categoryRef` o `newCategoryName`. Si vienen los dos, gana `categoryRef`.
+- Debe venir exactamente uno de `categoryRef` o `newCategoryName`. Si no viene ninguno o vienen los dos, la respuesta es inválida (`error: invalid_output`).
 - `relatedRef` no puede ser igual a `targetRef`.
 
 **Categoría al agrupar.** En una respuesta `join`, la categoría (`categoryRef` o `newCategoryName`) es la categoría que la IA propone para **el incidente consolidado**, no para el aviso nuevo por separado. Reglas:
@@ -379,14 +396,16 @@ Reglas entre campos, que se comprueban en el código después de validar con Zod
 4. Un incidente `validated` o `discarded` no cambia. Lo aplica `applyDecision`.
 5. La categoría propuesta debe existir en el catálogo o cumplir las reglas para crear una nueva (último recurso, una como mucho por aviso, nombre normalizado).
 
-El prompt indica que **no se cambia la categoría solo porque el aviso nuevo, visto por separado, encajaría en otra**. Por defecto se mantiene la categoría actual, y solo cambia si el conjunto (resumen del incidente más el aviso nuevo) se entiende mejor con otra. La IA solo ve el resumen y no los avisos anteriores, así que la calidad de esta decisión depende de que el resumen recoja bien lo ya reportado.
+El prompt indica que **no se cambia la categoría solo porque el aviso nuevo, visto por separado, encajaría en otra**. Por defecto se mantiene la categoría actual, y solo cambia si el conjunto (todos los avisos del incidente más el aviso nuevo) se entiende mejor con otra. La IA recibe los textos completos de los avisos del incidente (ver «Contrato de entrada»), así que esta decisión no depende de que el resumen esté al día.
 
 **Prompt.** Es un archivo de texto versionado (`PROMPT_VERSION`) con cinco partes:
 - el rol del modelo («propones, no decides»);
 - la política de agrupación (mismo edificio y planta como condición necesaria, mismo suceso como condición suficiente, ante la duda separar, relacionar no es agrupar);
 - la prohibición de inventar ubicaciones o referencias;
-- las reglas de gravedad y la creación de categorías como último recurso;
-- un ejemplo resuelto.
+- las reglas de gravedad (solo mantener o subir) y la **rúbrica ficticia de gravedad** de la demo (ver archivo 12 del Detailed Implementation Plan);
+- la creación de categorías como último recurso;
+- un ejemplo resuelto de agrupación;
+- un **ejemplo negativo genérico**, ajeno al guion: dos sucesos independientes en el mismo edificio, la misma planta y con pocos minutos de diferencia, que no deben agruparse. El ejemplo explica que coincidir en ubicación permite *evaluar* la agrupación, pero no demuestra que sea el mismo suceso, y que tampoco lo demuestra la proximidad en el tiempo.
 
 El texto de **todos** los avisos (el nuevo y los de cada incidente del contexto) va entre delimitadores y se declara como **dato, no instrucción**, como defensa básica frente a inyección de prompt. El prompt explica qué significan `canJoin` y `canRelate`: la IA puede leer cualquier incidente para entender el contexto, pero solo puede poner en `targetRef` un incidente con `canJoin` y en `relatedRef` uno con `canRelate`.
 
@@ -411,7 +430,7 @@ La relación aviso-incidente sigue derivándose solo de `report.incidentId`. Par
 | `pending`, misma planta | sí | **no** | Si es el mismo suceso, se agrupa; si no lo es, no se relaciona (grupo C). Ante la duda, incidente nuevo sin relación. |
 | `pending`, otra planta | no | sí | Mismo fenómeno en otra planta (grupo B, CUJ 3). |
 | `validated`, cualquier planta | no | sí | Información nueva sobre un incidente ya aprobado (CUJ 4). |
-| `discarded`, cualquier planta | no | no | Un incidente descartado no se agrupa ni se relaciona. |
+| `discarded`, cualquier planta | no | no | Un incidente descartado no se agrupa ni se relaciona, tampoco si se descartó mientras la llamada estaba en curso: la acción de la persona prevalece. |
 | Cualquier estado, **otro edificio** | no | no | Nunca se envía en el contexto. Si apareciera, el servidor lo rechaza en la validación de entrada. |
 
 Que un incidente sea `canRelate` no obliga a relacionarlo. La IA solo usa `relatedRef` si hay relación semántica (mismo fenómeno o consecuencia directa). La regla de la primera fila (`pending` en la misma planta no se puede relacionar) es la forma de cumplir que dos sucesos distintos de la misma planta nunca se relacionen de forma automática.
@@ -509,7 +528,10 @@ Las dos implementaciones devuelven el mismo `TriageDecision`, y las dos decision
      - `severity = max(actual, propuesta)` si no está bloqueado;
      - `protocolId` se actualiza si no está bloqueado;
      - `categoryId` se actualiza con la categoría propuesta si `category` no está bloqueado. La propuesta es una categoría existente o una nueva que cumple las reglas de creación (paso 4). Si es igual a la actual, no cambia nada.
-   - Es decir, si `canJoin(destino, aviso)` se cumple **con el estado actual**. Si no (por ejemplo, se validó o se descartó durante la llamada), se trata como `create`. El destino se usa como relación solo si `canRelate(destino, aviso)` se cumple con el estado actual y la decisión no traía ya otra relación. Así, un destino validado durante la llamada queda relacionado y uno descartado no.
+   - Es decir, si `canJoin(destino, aviso)` se cumple **con el estado actual**. Si no, se trata como `create`, y la relación depende de qué le pasó al destino durante la llamada:
+     - **pasó a `validated`:** incidente nuevo **relacionado** con él (`canRelate` se cumple), salvo que la decisión ya trajera otra relación válida;
+     - **pasó a `discarded`:** incidente nuevo **sin relación**. La acción explícita de descartar de una persona prevalece sobre una propuesta de la IA que empezó con información anterior;
+     - **ya no existe:** incidente nuevo **sin relación**, porque no se puede guardar una referencia a un registro inexistente.
 3. **`create`:** se crea el incidente con un `id` nuevo, `state: pending`, todos los bloqueos a `false` y el edificio y la planta del aviso. En la misma operación se asigna `report.incidentId` (invariante 3).
 4. **Categoría nueva:** si el nombre normalizado ya existe, se reutiliza esa categoría. Si no, se crea `{ official: false }`.
 5. **Relación:** `relatedIncidentId` se conserva solo si el incidente existe, es distinto del propio y `canRelate` se cumple con el estado actual. Si no, pasa a `null`.
@@ -748,6 +770,606 @@ Las alternativas A a M salen del brief (`concepts_brief.md`, sección «Alternat
 *   **Pros**: si la IA falla en mitad de la entrevista, se cambia de modo sin reiniciar.
 *   **Cons**: las respuestas pregrabadas solo son coherentes con un tablero que sigue el guion desde el principio; un motor de reglas que funcione desde cualquier estado cuesta unas 3 h.
 *   **Reason for Rejection**: Rejected by author: el modo sin API solo se activa con el tablero vacío y la cola parada. El motor de reglas queda como opcional si sobra tiempo.
+
+--------------------------------------------------------------------------------
+
+## Non-Functional Requirements
+
+- **Seguridad:**
+  - la clave del Gateway y `DEMO_PASSWORD` solo existen en el servidor;
+  - la entrada se valida con Zod y tiene límites de tamaño;
+  - la respuesta de la IA se sanea antes de tocar el estado;
+  - los textos de los avisos van delimitados en el prompt y se declaran como datos;
+  - todos los datos son ficticios; los protocolos y ubicaciones llevan la marca «FICTICIO – sin validez operativa».
+- **Rendimiento y tokens:**
+  - una llamada por aviso, con temperatura 0 y salida acotada;
+  - el contexto completo del edificio crece con el tablero, pero queda acotado a 30 incidentes y 150 avisos;
+  - la ráfaga completa tiene como objetivo unos 20-40 s con la IA real (pendiente de medir el día 1) y unos 8 s en modo sin API.
+- **Despliegue y vuelta atrás:**
+  - cada push a `main` despliega en Vercel;
+  - para volver atrás, se promueve el despliegue anterior desde el panel de Vercel;
+  - un cambio en la forma del estado sube `schemaVersion` y el tablero guardado se descarta.
+
+### Future Improvements
+
+- **Estado en el servidor:** Postgres o Redis como fuente de verdad, con una cola o un bloqueo por edificio para varios operadores.
+- **Registro de eventos** (event sourcing) para auditoría: quién validó qué y cuándo.
+- **Límite de peticiones real** compartido entre instancias (firewall del edge o Redis) y autenticación de operadores.
+- **Estado `Resuelto`** después de `Validado`, y **«Separar aviso»** para deshacer agrupaciones.
+- **Motor de reglas** como respaldo que funcione desde cualquier estado del tablero, con cambio automático por aviso tras varios fallos.
+- **Vista móvil del ocupante** y avisos por audio con transcripción.
+- **Evaluación formal** de la agrupación con un conjunto de casos etiquetados.
+
+--------------------------------------------------------------------------------
+
+## Detailed Implementation Plan
+
+### Orden de construcción y presupuesto
+
+| Fase | Contenido | Horas | Condición para pasar a la siguiente |
+|---|---|---|---|
+| 0. Esqueleto | Plantilla de TanStack Start, despliegue en Vercel, una llamada de `triageReport` con salida estructurada a través del Gateway, versiones fijadas en `package-lock.json`. | 2 | URL pública que devuelve una decisión válida de los dos modelos candidatos. Si el Gateway falla, se decide que el modo sin API es el camino principal. |
+| 1. Tipos y datos | `domain/types.ts`, datos maestros, guion y respuestas pregrabadas. | 1 | `npm run typecheck` sin errores. |
+| 2. Dominio | Elegibilidad, `applyDecision`, acciones del operador, selectores y sus tests. | 3,5 | `npm test` en verde. |
+| 3. Contrato con la IA y servidor | Esquema, alias, saneado, prompt, `triageReport` y tests del saneado. | 2,5 | Tests en verde y una llamada real correcta. |
+| 4. Ajuste del prompt | `scripts/check-burst.ts` contra el modelo real. | 1,5 | El script termina con código 0: la agrupación, la relación y la categoría coinciden con la tabla esperada. La gravedad y el protocolo fuera de rango quedan como advertencias, no bloquean. |
+| 5. Store y cola | Zustand, persistencia, hidratación, cola, reinicio y contraseña. | 1,5 | Recargar conserva el estado sin avisos de hidratación. |
+| 6. Interfaz | Panel, feed, tablero, tarjetas y diálogos. | 5,5 | Con la IA real, la ráfaga se ve de principio a fin en la interfaz, y editar, validar y descartar funcionan. Los CUJ completos se comprueban en la fase 9. |
+| 7. Categorías | Insignia, aprobación, toast y filtro de visibles. | 1,5 | CUJ 6 completo. |
+| 8. Modo sin API | `FallbackEngine` y su test de la ráfaga completa. | 1,5 | El test del recorrido de la demo en verde. |
+| 9. README, verificación y ensayo | README con Mermaid, recorrido manual de los CUJ 1 a 9 (después de las fases 7 y 8) y ensayo de la demo. | 1,5 | Los CUJ 1 a 9 se completan a mano sobre la URL desplegada, en modo IA y en modo sin API. |
+| Margen | | 2 | |
+| **Total** | | **24** | |
+
+### Estructura de carpetas
+
+Cada carpeta tiene una sola responsabilidad. No hay archivos *barrel* (`index.ts`) ni capas de abstracción sin un segundo uso.
+
+| Carpeta | Responsabilidad | Puede importar |
+|---|---|---|
+| `src/domain/` | Tipos y reglas de negocio en funciones puras. Sin E/S, sin fechas ni IDs generados dentro. | nada fuera de `src/domain/` |
+| `src/data/` | Datos maestros, guion de la ráfaga y respuestas pregrabadas (constantes). | `domain` (tipos) |
+| `src/ai/` | Contrato con la IA: esquema Zod, alias, prompt y saneado estático. Puro y testeable. | `domain`, `data` |
+| `src/server/` | Código que solo se ejecuta en el servidor: la Server Function, la llamada al modelo, la contraseña y el límite de peticiones. | `domain`, `data`, `ai` |
+| `src/engines/` | `TriageEngine` y sus dos implementaciones. | `domain`, `data`, `server` (solo la referencia a la Server Function) |
+| `src/store/` | Store de Zustand y persistencia. | `domain`, `data` |
+| `src/queue/` | Cola secuencial. | `domain`, `store`, `engines` |
+| `src/components/` | Componentes React. `ui/` contiene los generados por shadcn. | todo lo anterior salvo `server` |
+| `src/routes/` | Rutas de TanStack Start. | `components`, `data` |
+| `scripts/` | Script manual de comprobación de la ráfaga. | `ai`, `server`, `domain`, `data` |
+
+### Target Files to Create/Modify
+
+#### Configuración del proyecto
+
+##### 1. `package.json` (Create)
+
+*   **Type / Scope**: configuración de npm.
+*   **Proposed Changes**: dependencias de la plantilla oficial de TanStack Start (React, `@tanstack/react-start`, `@tanstack/react-router`, Vite) más `ai`, `zod`, `zustand`, Tailwind v4 y las dependencias de shadcn/ui (`sonner` incluido). Dependencias de desarrollo: `vitest`, `tsx` y `typescript`. Scripts:
+    *   `dev`, `build` y `start`, los de la plantilla;
+    *   `test` (`vitest run`);
+    *   `test:watch`;
+    *   `typecheck` (`tsc --noEmit`);
+    *   `check:burst` (`tsx scripts/check-burst.ts`).
+
+    Las versiones exactas se fijan en la fase 0. AI SDK y Zod deben ser compatibles: Zod 3.25 o posterior, o Zod 4.
+
+##### 2. `package-lock.json` (Create)
+
+*   **Type / Scope**: lockfile generado por npm.
+*   **Proposed Changes**: se confirma en un commit al final de la fase 0 para fijar las versiones antes de generar código.
+
+##### 3. `tsconfig.json` (Create)
+
+*   **Type / Scope**: configuración de TypeScript.
+*   **Proposed Changes**: la de la plantilla, con `strict: true` y el alias `@/*` apuntando a `src/*`.
+
+##### 4. `vite.config.ts` (Create)
+
+*   **Type / Scope**: build.
+*   **Proposed Changes**: plugin de TanStack Start con el destino de Vercel, plugin de Tailwind v4 y alias `@`. Cómo se configura el destino de Vercel con la versión actual de Start se comprueba en la fase 0.
+
+##### 5. `vitest.config.ts` (Create)
+
+*   **Type / Scope**: tests.
+*   **Proposed Changes**: entorno `node` e incluye `src/**/*.test.ts`. No hace falta entorno de navegador, porque solo se testean funciones puras y el motor sin API.
+
+##### 6. `components.json` (Create)
+
+*   **Type / Scope**: configuración de shadcn/ui.
+*   **Proposed Changes**: generado con `npx shadcn init` (Tailwind v4, alias `@/components`).
+
+##### 7. `.env.example` (Create)
+
+*   **Type / Scope**: documentación de variables de entorno.
+*   **Proposed Changes**: tres variables:
+    *   `AI_GATEWAY_API_KEY`: solo en local; en Vercel se usa OIDC;
+    *   `TRIAGE_MODEL`, por ejemplo `google/gemini-2.5-flash`;
+    *   `DEMO_PASSWORD`.
+
+    Ninguna lleva el prefijo `VITE_`, así que ninguna llega al bundle del cliente.
+
+##### 8. `.gitignore` (Create or Modify)
+
+*   **Type / Scope**: control de versiones.
+*   **Proposed Changes**: ignorar `node_modules/`, `.env`, `.env.local`, `.output/`, `.vercel/` y `dist/`.
+
+#### Datos (`src/data/`)
+
+##### 9. `src/data/buildings.ts` (Create)
+
+*   **Type / Scope**: datos maestros.
+*   **Proposed Changes**: `BUILDINGS: Building[]`:
+    *   `torre-central`, Torre Central, plantas −2 a 8;
+    *   `anexo-a`, Edificio Anexo A, plantas −1 a 3;
+    *   `laboratorios`, Laboratorios, plantas −1 a 2.
+
+    Incluye la función `floorLabel(n)`: −1 → «Sótano 1», 0 → «Planta baja», 2 → «Planta 2».
+
+##### 10. `src/data/protocols.ts` (Create)
+
+*   **Type / Scope**: datos maestros. **Todos los valores son ficticios y sin validez operativa.**
+*   **Proposed Changes**: `PROTOCOLS: Protocol[]` con 5 entradas (`id`, `title`, `kind`) y `PROTOCOL_PARAMS[buildingId][protocolId]` con el texto concreto de cada edificio. Cada texto lleva el prefijo visible «[FICTICIO]».
+
+    | Protocolo (`id`) | Torre Central | Edificio Anexo A | Laboratorios |
+    |---|---|---|---|
+    | `evac-plan`: evacuación por las rutas del plano | Ruta verde del plano, escaleras E-1 y E-2 hasta la salida principal | Ruta azul del plano, escalera única hasta el patio interior | Ruta naranja del plano, escalera de servicio hasta el muelle de carga |
+    | `evac-nearest`: evacuación por las salidas más cercanas | Salidas Norte y Sur de planta baja | Salida de recepción y salida lateral Oeste | Salida principal y salida de emergencia del sótano −1 |
+    | `meet-inside`: punto de reunión en una planta | Vestíbulo de planta baja | Sala polivalente de planta 1 | Aula 0.2 de planta baja |
+    | `meet-outside`: punto de reunión fuera del edificio | Plaza exterior, punto PR-1 | Aparcamiento Este, punto PR-2 | Jardín Norte, punto PR-3 |
+    | `notify`: solo informar a los usuarios | Notificación a ocupantes de Torre Central | Notificación a ocupantes del Anexo A | Notificación a ocupantes de Laboratorios |
+
+##### 11. `src/data/categories.ts` (Create)
+
+*   **Type / Scope**: datos maestros.
+*   **Proposed Changes**: `INITIAL_CATEGORIES`: `fire-smoke` (Incendio/Humo), `electrical` (Fallo Eléctrico), `medical` (Médico) y `security` (Seguridad), todas con `official: true`.
+
+##### 12. `src/data/burst-script.ts` (Create)
+
+*   **Type / Scope**: guion de la ráfaga. **Son fixtures de demostración, no recomendaciones de seguridad reales.**
+*   **Proposed Changes**: `BURST_SCRIPT`, con los 9 avisos en orden de llegada, y `EXPECTED_GROUPS` para la comprobación manual y los tests.
+
+    | Clave | Edificio, planta | Texto | Grupo |
+    |---|---|---|---|
+    | S1 | Torre Central, 2 | «Huele a humo en el pasillo de la segunda planta, cerca de las salas de reuniones.» | A (crea) |
+    | S2 | Torre Central, 2 | «Hay una especie de niebla gris saliendo del falso techo junto a la sala 2.04.» | A |
+    | S3 | Anexo A, 0 | «Se ha ido la luz en toda la recepción y las puertas automáticas no abren.» | D (crea) |
+    | S4 | Torre Central, 2 | «Olor a quemado muy fuerte junto a la escalera de la planta 2, pican los ojos.» | A |
+    | S5 | Anexo A, 0 | «En recepción tampoco funcionan los ordenadores ni el ascensor, parece un corte general.» | D |
+    | S6 | Torre Central, 3 | «Está entrando humo por la puerta de la escalera en la planta 3.» | B (crea, relacionado con A) |
+    | S7 | Torre Central, 2 | «Ya se ven llamas pequeñas en el cuarto de fotocopiadoras de la segunda planta.» | A |
+    | S8 | Torre Central, 2 | «Una persona se ha desmayado en la cafetería de la planta 2. Está consciente y responde cuando le hablan.» | C (crea, sin relación) |
+    | S9 | Laboratorios, −1 | «Cae agua del techo en el almacén del sótano y se está formando un charco grande.» | E (crea categoría no oficial) |
+
+    **Rúbrica de gravedad.** *Criterio de clasificación ficticio de esta demo, sin valor operativo.* Va en el prompt y sirve para justificar los resultados esperados:
+
+    | Gravedad | Criterio (ficticio) |
+    |---|---|
+    | Baja | Molestia o anomalía sin riesgo para las personas y sin efecto apreciable en el uso del edificio. |
+    | Media | Afecta a un servicio o al uso de una zona (luz, accesos, ascensores, agua), o a una persona sin gravedad aparente, sin riesgo inmediato para la vida. |
+    | Alta | Riesgo posible para las personas o propagación probable: humo en zonas de paso, varias personas afectadas o un servicio crítico caído. Requiere atención inmediata. |
+    | Crítica | Peligro activo confirmado con riesgo inmediato para la vida: llamas visibles, humo denso que se extiende o personas atrapadas. |
+
+    **Resultados esperados al terminar la ráfaga.** En los rangos, la primera opción es la esperada y el resto son alternativas aceptables.
+
+    | Grupo | Avisos | Categoría | Gravedad esperada (rango aceptable) | Protocolo esperado (alternativa aceptable) | Relación |
+    |---|---|---|---|---|---|
+    | A | S1, S2, S4, S7 | Incendio/Humo | Crítica (Alta-Crítica) | `evac-plan` (alternativa: `evac-nearest`) | ninguna |
+    | B | S6 | Incendio/Humo | Alta (Alta-Crítica) | `evac-nearest` (alternativa: `evac-plan`) | → A |
+    | C | S8 | Médico | Media (Media-Alta) | `notify` | ninguna |
+    | D | S3, S5 | Fallo Eléctrico | Media (Media-Alta; Baja **no** es aceptable) | `notify` | ninguna |
+    | E | S9 | Nueva y no oficial. Nombre preferido **«Fuga de agua»**; también se acepta «Filtración de agua» | Media (Baja-Media) | `notify` | ninguna |
+
+    Notas:
+    - **Grupo C:** `notify` es el protocolo genérico disponible que mejor encaja entre los cinco. **No es una respuesta médica ni una recomendación operativa**: la demo no modela la atención sanitaria.
+    - **Grupo D:** las puertas automáticas y el ascensor que no funcionan afectan a los accesos (rúbrica: Media), y podrían llegar a Alta. Baja no es aceptable.
+    - **Grupo E:** el criterio obligatorio exige que S9 cree una categoría **nueva y no oficial** cuyo nombre normalizado esté en `S9_ACCEPTED_CATEGORY_NAMES = ["fuga de agua", "filtracion de agua"]`. La lista se define en este archivo y **solo sirve para comprobar este fixture**. No es un diccionario de sinónimos del dominio: el dominio sigue reutilizando categorías solo por nombre normalizado idéntico. El modo sin API usa exactamente «Fuga de agua».
+    - **Riesgo en S8:** el modelo podría relacionar el desmayo con el humo de la misma planta. La regla `canRelate = no` para los incidentes `pending` de la misma planta impide que se **relacione**, pero el modelo aún podría **agruparlo** con A. Para evitarlo, el prompt incluye un ejemplo negativo genérico (archivo 25): compartir edificio, planta o momento no demuestra que sea el mismo suceso. La comprobación obligatoria sigue exigiendo que S8 cree un incidente independiente y sin relación con A. Si falla en la fase 4, se ajusta el prompt, nunca el texto del aviso.
+
+    **Criterios de comprobación:**
+    - **Obligatorios:** agrupación (qué avisos forman cada incidente), relación (`relatedIncidentId`) y categoría (nombre normalizado). Si alguno no coincide, la comprobación falla.
+    - **Orientativos:** gravedad y protocolo. Se informa si el resultado está dentro del rango aceptable. Si está fuera, se muestra una advertencia y la comprobación no falla.
+    - En el **modo sin API**, todo debe coincidir exactamente con las respuestas pregrabadas, incluidos la gravedad y el protocolo (archivo 58).
+
+##### 13. `src/data/fallback-fixtures.ts` (Create)
+
+*   **Type / Scope**: respuestas pregrabadas del modo sin API.
+*   **Proposed Changes**: `FALLBACK_DECISIONS: Record<ScriptKey, FixtureDecision>`. `FixtureDecision` es igual que `TriageDecision`, salvo que `targetIncidentId` y `relatedIncidentId` se sustituyen por `targetAnchor` y `relatedAnchor`: la clave del aviso ancla del grupo (S1 para A, S3 para D). Los valores coinciden con los resultados esperados del archivo 12. Siempre se usa la opción esperada (la primera del rango):
+    *   la gravedad de A sube de forma progresiva: S1 Media, S2 Alta, S4 Alta, S7 Crítica;
+    *   B es Alta; C es Media; D es Media en S3 y S5; E es Media;
+    *   la categoría nueva de E se llama exactamente «Fuga de agua».
+
+    Cada `rationale` dice en una frase por qué se agrupa o se separa.
+
+#### Dominio (`src/domain/`)
+
+##### 14. `src/domain/types.ts` (Create)
+
+*   **Type / Scope**: tipos del dominio.
+*   **Proposed Changes**: todos los tipos del Technical Plan, apartado 2 (`Report`, `Incident` con `summaryLockedAtReportCount`, `Category`, `TriageState`, `Severity`, `IncidentState`, `EngineKind`, `TriageErrorKind` con `unauthorized`), más `TriageDecision`, `TriageResult`, `TriageInput`, `Building`, `Protocol` y `MasterData`. Solo tipos, sin lógica.
+
+##### 15. `src/domain/severity.ts` (Create)
+
+*   **Type / Scope**: lógica pura.
+*   **Proposed Changes**: `SEVERITY_ORDER`, `compareSeverity(a, b)` y `maxSeverity(a, b)`.
+
+##### 16. `src/domain/eligibility.ts` (Create)
+
+*   **Type / Scope**: lógica pura.
+*   **Proposed Changes**: `canJoin(incident, report)` y `canRelate(incident, report)`, que implementan la tabla de elegibilidad, incluida la fila «otro edificio → no/no». Las usan `src/ai/sanitize.ts` (servidor) y `apply-decision.ts` (cliente).
+
+##### 17. `src/domain/categories.ts` (Create)
+
+*   **Type / Scope**: lógica pura.
+*   **Proposed Changes**:
+    *   `normalizeCategoryName(name)`: minúsculas, sin tildes (NFD y eliminación de marcas diacríticas), espacios internos reducidos a uno y sin espacios en los extremos;
+    *   `findCategoryByName(categories, name)`;
+    *   `visibleCategories(state)`;
+    *   `approveCategory(state, categoryId)`.
+
+##### 18. `src/domain/selectors.ts` (Create)
+
+*   **Type / Scope**: datos derivados.
+*   **Proposed Changes**:
+    *   `reportsOf(state, incidentId)`, `reportCount`, `lastReportAt` y `newReportsSinceSummaryEdit`;
+    *   `queueOrder(state)`;
+    *   `incidentsByState(state)` para las tres columnas, ordenadas por `lastReportAt` descendente;
+    *   `isBoardEmpty(state)`;
+    *   `burstProgress(state)`;
+    *   `buildTriageInput(state, reportId)`: construye el `TriageInput` con todos los incidentes del mismo edificio y sus avisos. Si se supera el límite de 30 incidentes o 150 avisos, recorta en el orden `canJoin`, luego `canRelate` por recencia, luego el resto.
+
+##### 19. `src/domain/apply-decision.ts` (Create)
+
+*   **Type / Scope**: lógica pura central.
+*   **Proposed Changes**: `applyDecision(state, { reportId, decision, engine, newIncidentId, newCategoryId })`, con las reglas 1 a 6 del Technical Plan, apartado 6:
+    *   elegibilidad con el estado actual;
+    *   bloqueos, gravedad con `maxSeverity`, categoría al agrupar;
+    *   reutilización de categorías por nombre normalizado;
+    *   relación solo si se cumple `canRelate`.
+
+    Devuelve el estado nuevo y, además, `{ createdCategory: Category | null }`, para que la interfaz pueda mostrar el toast sin tener que comparar estados.
+
+##### 20. `src/domain/operator-actions.ts` (Create)
+
+*   **Type / Scope**: lógica pura.
+*   **Proposed Changes**:
+    *   `editIncident(state, incidentId, patch)`: activa el bloqueo de cada campo cambiado y fija `summaryLockedAtReportCount` al editar el resumen;
+    *   `validateIncident` y `discardIncident`.
+
+    Todas devuelven el estado sin cambios si el incidente no está `pending`.
+
+##### 21. `src/domain/reports.ts` (Create)
+
+*   **Type / Scope**: lógica pura del ciclo de vida de los avisos.
+*   **Proposed Changes**:
+    *   `createReport(input, { id, now, scriptKey })`;
+    *   `enqueueReports(state, reports)`;
+    *   `markProcessing`;
+    *   `markError(state, reportId, kind)`;
+    *   `retryReport(state, reportId, now)`;
+    *   `markInterruptedOnLoad(state)`: los avisos `queued` o `processing` pasan a `error: interrupted`.
+
+##### 22. `src/domain/initial-state.ts` (Create)
+
+*   **Type / Scope**: lógica pura.
+*   **Proposed Changes**: `createInitialState(runId)`: tablero vacío, categorías iniciales y modo `llm`. Se usa al arrancar, en `migrate` y en «Reiniciar».
+
+#### Contrato con la IA (`src/ai/`)
+
+##### 23. `src/ai/decision-schema.ts` (Create)
+
+*   **Type / Scope**: esquema Zod.
+*   **Proposed Changes**:
+    *   `AiDecisionSchema`: el objeto plano del Technical Plan, apartado 3, sin `confidence`, con todos los campos obligatorios y `null` cuando no hay valor;
+    *   `checkCrossFieldRules(decision)`: devuelve `ok` o el motivo del fallo.
+
+##### 24. `src/ai/aliases.ts` (Create)
+
+*   **Type / Scope**: lógica pura.
+*   **Proposed Changes**: `buildAliases(input)` devuelve los mapas `I1..In`, `C1..Cn` y `P1..P5` en las dos direcciones. Funciones de traducción alias → ID.
+
+##### 25. `src/ai/prompt.ts` (Create)
+
+*   **Type / Scope**: prompt versionado, en español.
+*   **Proposed Changes**:
+    *   `PROMPT_VERSION = "1"`;
+    *   `buildSystemPrompt()`: rol, política de agrupación, `canJoin`/`canRelate`, prohibición de inventar, reglas de gravedad con la rúbrica ficticia del archivo 12, categoría para el incidente en su conjunto, categoría nueva como último recurso, un ejemplo resuelto de agrupación y un ejemplo negativo genérico (dos sucesos independientes en el mismo edificio y planta, con poco tiempo entre ellos, que no se agrupan). Ninguno de los dos ejemplos forma parte del guion;
+    *   `buildUserPrompt(input, aliases, flags)`: el aviso nuevo y cada incidente con sus avisos, todo delimitado entre etiquetas `<aviso>…</aviso>`, más el catálogo de categorías y los protocolos con su texto para el edificio.
+
+##### 26. `src/ai/sanitize.ts` (Create)
+
+*   **Type / Scope**: lógica pura.
+*   **Proposed Changes**: `sanitizeDecision(aiDecision, aliases, flags, categories)` devuelve `TriageResult`. Aplica las reglas del paso 6 de la Server Function y traduce los alias a IDs reales.
+
+#### Servidor (`src/server/`)
+
+##### 27. `src/server/triage-report.ts` (Create)
+
+*   **Type / Scope**: Server Function de TanStack Start.
+*   **Proposed Changes**: `triageReport = createServerFn({ method: "POST" })`, con la validación de entrada en Zod (`TriageRequestSchema`: `{ password, input }`) y un manejador que sigue los pasos 0 a 9 del Technical Plan, apartado 4. Siempre devuelve un `TriageResult` y nunca lanza excepciones hacia el cliente.
+
+##### 28. `src/server/llm-client.ts` (Create)
+
+*   **Type / Scope**: adaptador único de AI SDK.
+*   **Proposed Changes**: `callTriageModel(system, user) → { ok, decision } | { ok: false, error }`. Es el único archivo que importa `ai`, de modo que si la API cambia (`generateObject` o `Output.object`), solo cambia este archivo. Configuración:
+    *   modelo `process.env.TRIAGE_MODEL`;
+    *   temperatura 0;
+    *   `maxOutputTokens` 800;
+    *   razonamiento extendido ("thinking") del modelo desactivado o al mínimo con `providerOptions`;
+    *   `abortSignal: AbortSignal.timeout(15000)`.
+
+    Traduce los errores: 429 → `rate_limit`, timeout → `timeout`, objeto no generado o que no pasa Zod → `invalid_output`, el resto → `server`.
+
+##### 29. `src/server/demo-password.ts` (Create)
+
+*   **Type / Scope**: comprobación de la contraseña.
+*   **Proposed Changes**: `checkDemoPassword(given)`. Compara en tiempo constante con `timingSafeEqual` de `node:crypto`, después de igualar longitudes. Si `DEMO_PASSWORD` no está definida, devuelve `false`: sin variable, la función rechaza todas las peticiones.
+
+##### 30. `src/server/rate-limit.ts` (Create)
+
+*   **Type / Scope**: límite de peticiones en memoria, por instancia y parcial.
+*   **Proposed Changes**: `takeToken()`, con una ventana fija de 60 s y 20 llamadas. Un comentario explica que no se comparte entre instancias. Si se supera, devuelve `rate_limit`.
+
+#### Motores (`src/engines/`)
+
+##### 31. `src/engines/triage-engine.ts` (Create)
+
+*   **Type / Scope**: interfaz.
+*   **Proposed Changes**: `interface TriageEngine { propose(input: TriageInput): Promise<TriageResult> }` y `getEngine(mode)`.
+
+##### 32. `src/engines/llm-engine.ts` (Create)
+
+*   **Type / Scope**: implementación con IA real.
+*   **Proposed Changes**: `createLlmEngine(getPassword)`. Llama a `triageReport({ data: { password, input } })` y devuelve `network` si la llamada de red falla.
+
+##### 33. `src/engines/fallback-engine.ts` (Create)
+
+*   **Type / Scope**: implementación sin API.
+*   **Proposed Changes**: `createFallbackEngine(getState)`. Busca la respuesta pregrabada por `report.scriptKey` y traduce cada ancla a un ID real: el `incidentId` actual del aviso ancla. Espera unos 600 ms antes de devolver. Sin `scriptKey`, o con un ancla sin incidente, devuelve `invalid_output`. Con el formulario desactivado en este modo no debería ocurrir.
+
+#### Store y cola
+
+##### 34. `src/store/triage-store.ts` (Create)
+
+*   **Type / Scope**: store de Zustand.
+*   **Proposed Changes**: `useTriageStore`, con:
+    *   el `TriageState`;
+    *   campos que no se guardan: `hydrated` y `demoPassword`;
+    *   acciones que llaman a las funciones del dominio y pasan los IDs y la hora generados aquí (`crypto.randomUUID()`, `Date.now()`).
+
+    Configuración de `persist`:
+    *   `name: "emergency-triage"`, `version: 1`;
+    *   un adaptador de `localStorage` con `try/catch`;
+    *   `partialize`: guarda `runId`, `mode`, `reports`, `incidents` y `categories`;
+    *   `migrate`: devuelve `createInitialState`;
+    *   `skipHydration: true`;
+    *   `onRehydrateStorage`, que aplica `markInterruptedOnLoad` y marca `hydrated`.
+
+##### 35. `src/queue/triage-queue.ts` (Create)
+
+*   **Type / Scope**: cola secuencial sin React.
+*   **Proposed Changes**: estado interno `running` y `paused`. Exporta:
+    *   `submitManualReport(form)`;
+    *   `startBurst()`;
+    *   `retry(reportId)`;
+    *   `resumeAfterPassword()`;
+    *   `resetDemo()`.
+
+    `drain()` sigue el pseudocódigo del Technical Plan, apartado 8. Un error `unauthorized` detiene la cola, borra `demoPassword` y avisa a la interfaz para que abra el diálogo. La cola no arranca mientras `hydrated` sea `false`.
+
+#### Interfaz (`src/routes/`, `src/components/`)
+
+##### 36. `src/routes/__root.tsx` (Create)
+
+*   **Type / Scope**: documento HTML raíz.
+*   **Proposed Changes**: `<html lang="es">`, la hoja de estilos, `<Toaster />` de `sonner` y los metadatos (título «EmergencyTriage – demo»).
+
+##### 37. `src/routes/index.tsx` (Create)
+
+*   **Type / Scope**: página única.
+*   **Proposed Changes**: el `loader` devuelve `{ buildings, protocols, protocolParams }`. El layout tiene cabecera (con la nota «Demo con datos ficticios») y tres zonas:
+    *   `ControlPanel`;
+    *   `ClientOnly` con `ReportFeed`;
+    *   `ClientOnly` con `IncidentBoard`.
+
+    Cada `ClientOnly` usa `BoardSkeleton` mientras carga. También monta `StoreHydrator`.
+
+##### 38. `src/router.tsx` (Create)
+
+*   **Type / Scope**: creación del router.
+*   **Proposed Changes**: el de la plantilla, sin cambios.
+
+##### 39. `src/styles/app.css` (Create)
+
+*   **Type / Scope**: estilos.
+*   **Proposed Changes**: Tailwind v4, los tokens de tema de shadcn y cuatro colores de gravedad: Baja gris, Media ámbar, Alta naranja, Crítica rojo.
+
+##### 40. `src/components/StoreHydrator.tsx` (Create)
+
+*   **Type / Scope**: componente sin interfaz visible.
+*   **Proposed Changes**: llama a `useTriageStore.persist.rehydrate()` en un `useEffect` y no pinta nada.
+
+##### 41. `src/components/ControlPanel.tsx` (Create)
+
+*   **Type / Scope**: panel lateral.
+*   **Proposed Changes**: contiene:
+    *   `ReportForm`;
+    *   «Simular ráfaga», desactivado mientras la ráfaga está en curso;
+    *   «Reiniciar demo», con confirmación (`AlertDialog`);
+    *   el interruptor «Modo sin API», con su tooltip cuando está desactivado;
+    *   el progreso «n/9».
+
+    Las partes que leen el store van dentro de `ClientOnly`.
+
+##### 42. `src/components/ReportForm.tsx` (Create)
+
+*   **Type / Scope**: formulario.
+*   **Proposed Changes**: selector de edificio, selector de planta (según el edificio, con `floorLabel`) y área de texto con contador 0/500. El botón «Enviar aviso» se desactiva si el texto está vacío o si el modo sin API está activo (con un tooltip que explica por qué).
+
+##### 43. `src/components/PasswordDialog.tsx` (Create)
+
+*   **Type / Scope**: diálogo.
+*   **Proposed Changes**: se abre cuando hace falta la contraseña. Pide la contraseña de demo, la guarda en `demoPassword` (en memoria) y llama a `resumeAfterPassword()`. Muestra un error si la anterior fue rechazada.
+
+##### 44. `src/components/ReportFeed.tsx` y `src/components/ReportItem.tsx` (Create)
+
+*   **Type / Scope**: feed de avisos.
+*   **Proposed Changes**: lista de más reciente a más antiguo. Cada `ReportItem` muestra edificio, planta, hora, texto, la insignia de estado («En cola», «Procesando», «Asignado a #corto», «Error: …» con su texto en español) y «Reintentar» si hay error.
+
+##### 45. `src/components/IncidentBoard.tsx` (Create)
+
+*   **Type / Scope**: tablero.
+*   **Proposed Changes**: tres columnas (`Pendiente`, `Validado`, `Descartado`) con su contador, a partir de `incidentsByState`.
+
+##### 46. `src/components/IncidentCard.tsx` (Create)
+
+*   **Type / Scope**: tarjeta de incidente.
+*   **Proposed Changes**: los campos del Technical Plan, apartado 9, más:
+    *   un candado en los campos bloqueados;
+    *   «N avisos nuevos desde tu edición» si `newReportsSinceSummaryEdit > 0`;
+    *   la insignia «No oficial» y «Aprobar categoría»;
+    *   «Relacionado con #…»;
+    *   «Propuesto por IA» o «Sin API»;
+    *   el texto del protocolo con la marca «[FICTICIO]»;
+    *   la lista de avisos, plegable.
+
+    Acciones (solo en `Pendiente`): «Editar», «Validar» y «Descartar». En `Validado` muestra «Protocolo aprobado (no ejecutado: demo)».
+
+##### 47. `src/components/EditIncidentDialog.tsx` (Create)
+
+*   **Type / Scope**: diálogo de edición.
+*   **Proposed Changes**: selectores de categoría (de `visibleCategories`), gravedad y protocolo, y área de texto para el resumen (300 como máximo). Solo envía los campos que han cambiado. Avisa de que los campos editados quedan bloqueados para la IA.
+
+##### 48. `src/components/SeverityBadge.tsx` y `src/components/BoardSkeleton.tsx` (Create)
+
+*   **Type / Scope**: componentes de presentación.
+*   **Proposed Changes**: insignia de gravedad con color y texto en español, y esqueleto de carga para el feed y el tablero.
+
+##### 49. `src/components/ui/*` (Create)
+
+*   **Type / Scope**: componentes generados por shadcn/ui.
+*   **Proposed Changes**: `button`, `card`, `badge`, `dialog`, `alert-dialog`, `select`, `textarea`, `label`, `switch`, `tooltip`, `sonner`, `skeleton`, `scroll-area` y `collapsible`. No se modifican a mano.
+
+##### 50. Toast de categoría nueva (dentro de `src/queue/triage-queue.ts`)
+
+*   **Type / Scope**: comportamiento.
+*   **Proposed Changes**: cuando `applyDecision` devuelve `createdCategory`, la cola llama a `toast("La IA ha propuesto la categoría nueva «X»")`. No es un archivo nuevo, pero se cita para que el comportamiento no se pierda.
+
+#### Tests
+
+##### 51. `src/domain/eligibility.test.ts` (Create)
+
+*   **Proposed Changes**: un caso por fila de la tabla de elegibilidad (5 filas), con `canJoin` y `canRelate`.
+
+##### 52. `src/domain/apply-decision.test.ts` (Create)
+
+*   **Proposed Changes**:
+    *   `join` válido;
+    *   `join` a un incidente validado durante la llamada → `create` relacionado;
+    *   `join` a un incidente descartado durante la llamada → `create` sin relación;
+    *   `join` a un incidente que ya no existe → `create` sin relación;
+    *   `join` a otra planta → `create`;
+    *   bloqueos: no cambia la categoría, la gravedad, el protocolo ni el resumen bloqueados;
+    *   la gravedad no baja;
+    *   la categoría cambia al agrupar si no está bloqueada;
+    *   una categoría nueva con nombre equivalente a uno existente se reutiliza;
+    *   `createdCategory` se devuelve solo cuando se crea una categoría;
+    *   un aviso eliminado por un reinicio no cambia nada;
+    *   invariante 3: todo incidente creado tiene su aviso.
+
+##### 53. `src/domain/operator-actions.test.ts` (Create)
+
+*   **Proposed Changes**:
+    *   cada edición bloquea su campo;
+    *   editar el resumen guarda `summaryLockedAtReportCount`;
+    *   validar y descartar son finales;
+    *   no se puede editar un incidente que no está `pending`;
+    *   `approveCategory`.
+
+##### 54. `src/domain/selectors.test.ts` (Create)
+
+*   **Proposed Changes**:
+    *   contador, lista y `lastReportAt` calculados;
+    *   `newReportsSinceSummaryEdit`;
+    *   `visibleCategories` oculta las no oficiales sin uso y muestra las usadas por incidentes cerrados;
+    *   `buildTriageInput` incluye solo el mismo edificio y respeta el orden de recorte.
+
+##### 55. `src/domain/reports.test.ts` (Create)
+
+*   **Proposed Changes**:
+    *   `retryReport` mueve el aviso al final de la cola;
+    *   `markInterruptedOnLoad`;
+    *   `lastReportAt` no retrocede tras un reintento.
+
+##### 56. `src/ai/sanitize.test.ts` (Create)
+
+*   **Proposed Changes**: un caso por regla de saneado:
+    *   `targetRef` desconocido;
+    *   `targetRef` sin `canJoin`, con y sin `canRelate`;
+    *   `relatedRef` desconocido o sin `canRelate`;
+    *   `categoryRef` desconocido;
+    *   `newCategoryName` duplicado;
+    *   `protocolRef` desconocido ← **el test que se enseña en la entrevista**;
+    *   recorte de textos.
+
+##### 57. `src/ai/decision-schema.test.ts` (Create)
+
+*   **Proposed Changes**:
+    *   las reglas entre campos: `join` sin `targetRef` es inválido; sin `categoryRef` ni `newCategoryName` es inválido; **con los dos también es inválido** (`invalid_output`); con exactamente uno es válido;
+    *   un objeto con un campo de más o de menos no pasa Zod.
+
+##### 58. `src/engines/fallback-engine.test.ts` (Create)
+
+*   **Type / Scope**: test del recorrido determinista de la demo.
+*   **Proposed Changes**: ejecuta los 9 avisos de `BURST_SCRIPT` con `FallbackEngine` y `applyDecision` sobre un estado inicial. Comprueba que el resultado coincide **exactamente** con `EXPECTED_GROUPS`: agrupación, relación, categoría, gravedad y protocolo.
+
+#### Script y documentación
+
+##### 59. `scripts/check-burst.ts` (Create)
+
+*   **Type / Scope**: comprobación manual con el modelo real. No forma parte de `npm test`.
+*   **Proposed Changes**: ejecuta la ráfaga en orden, en Node, con `buildTriageInput`, el prompt, `callTriageModel`, `sanitizeDecision` y `applyDecision` en memoria, sin pasar por HTTP. Lee `.env.local`. Imprime una tabla «esperado frente a obtenido» por grupo, con dos bloques:
+    *   **Obligatorios** (agrupación, relación, categoría por nombre normalizado): si alguno no coincide, muestra `FALLO` y el script termina con código 1. Para S9, la categoría coincide si es nueva, no oficial y su nombre normalizado está en `S9_ACCEPTED_CATEGORY_NAMES`.
+    *   **Orientativos** (gravedad, protocolo): muestra `OK` si el resultado está dentro del rango aceptable y `AVISO` si no. Los avisos no cambian el código de salida.
+
+    **No es una evaluación estadística.**
+
+##### 60. `README.md` (Create)
+
+*   **Type / Scope**: documentación técnica en español.
+*   **Proposed Changes**:
+    *   qué es y la advertencia de datos ficticios;
+    *   cómo ejecutarlo (variables de entorno, `npm run dev`, `npm test`, `npm run check:burst`);
+    *   diagrama de capas y diagrama de secuencia de un aviso, en Mermaid;
+    *   diagrama de estados del incidente;
+    *   las invariantes;
+    *   la elegibilidad;
+    *   el resumen de los ADRs y trade-offs;
+    *   la hoja de ruta a producción;
+    *   el guion de la demo.
+
+##### 61. `docs/designs/emergency_triage.md` (Create, en el paso de finalización)
+
+*   **Type / Scope**: documento de diseño final.
+*   **Proposed Changes**: copia final de este `design_draft.md`.
+
+##### 62. `concepts_brief.md` y `design_draft.md` (sin cambios)
+
+*   **Proposed Changes**: se conservan en la raíz como historial del diseño.
+
+### Verification Plan
+
+*   **Compilation/Build**: `npm run typecheck` y `npm run build` sin errores. Despliegue de vista previa en Vercel en cada push.
+*   **Unit Tests**: `npm test` (Vitest). Archivos 51 a 58.
+*   **Static Analysis & Linting**: el modo `strict` de TypeScript. No se añade ESLint para no gastar tiempo en configurarlo.
+*   **Test Coverage Requirement**: sin porcentaje fijo. Requisitos:
+    *   cada invariante del dominio, cada fila de la tabla de elegibilidad y cada regla de saneado tienen al menos un test;
+    *   el recorrido de la demo en modo sin API tiene su test de principio a fin (archivo 58).
+*   **E2E/Integration (manual)**:
+    1. `npm run check:burst` contra el modelo real termina con código 0: los criterios obligatorios coinciden con `EXPECTED_GROUPS`. Los avisos sobre gravedad o protocolo se revisan y se anotan, pero no bloquean. Comprueba las agrupaciones del modelo.
+    2. Sobre la URL desplegada, recorrer los CUJ 1 a 9 a mano, en modo IA y en modo sin API, con una contraseña incorrecta y otra correcta, recargando a mitad de la ráfaga (el aviso debe quedar en `interrupted`) y comprobando que la consola del navegador no muestra avisos de hidratación.
+    3. Comprobar en el bundle del cliente (búsqueda en `.output/public`) que no aparece el valor de `DEMO_PASSWORD` ni el de `AI_GATEWAY_API_KEY`.
+    4. Medir el tiempo de la ráfaga completa con la IA real y ajustar la pausa entre avisos si hace falta.
 
 --------------------------------------------------------------------------------
 
