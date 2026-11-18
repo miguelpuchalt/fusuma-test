@@ -702,14 +702,14 @@ Los nombres concretos de funciones y opciones que dependen de la versión no se 
 
 | Dato | Valor |
 |---|---|
-| Versiones de `@tanstack/react-start`, `ai` y `zod` | |
-| Función de salida estructurada y nombre de la opción de tokens | |
-| Comprobadores de error (timeout, 429, salida que no cumple el esquema) | |
-| Dónde se configura `maxDuration` y valor que muestra Vercel | |
-| Carpeta de salida del bundle del cliente | |
-| Saldo gratuito y modelos elegibles | |
-| `TRIAGE_MODEL` elegido y opción de razonamiento usada | |
-| Respuesta, tokens y coste de la llamada con S1 | |
+| Versiones de `@tanstack/react-start`, `ai` y `zod` | `@tanstack/react-start` 1.169.5, `ai` 7.0.176, `zod` 4.6.7 (importado desde `"zod"`; el peer de `ai` admite `^3.25.76 || ^4.1.8`). También `nitro` 3.0.260610-beta, `vite` 8.3.8, `typescript` 6.0.3, `react` 19.3.1. Todas exactas, sin `^` ni `~`. |
+| Función de salida estructurada y nombre de la opción de tokens | `generateText` con `output: Output.object({ schema })`. En `ai` 7 `generateObject` está marcada `@deprecated`. Tokens: `maxOutputTokens`. Razonamiento: `reasoning: 'none'`. Además `maxRetries: 0` y `abortSignal`. El validador de la Server Function se llama `.validator(fn)` (no `inputValidator`). |
+| Comprobadores de error (timeout, 429, salida que no cumple el esquema) | `error.name` `TimeoutError` o `AbortError`; `APICallError.isInstance(e) && e.statusCode === 429`; `NoObjectGeneratedError.isInstance(e)`. Todos se importan de `ai`. |
+| Dónde se configura `maxDuration` y valor que muestra Vercel | `vite.config.ts`: `nitro({ vercel: { functions: { maxDuration: 30 } } })`. Comprobado en el despliegue: la función `__server` tiene `timeout: 30`, runtime `nodejs24.x`, 2048 MB. No hace falta `vercel.json` para esto (el de la plantilla solo declara `framework`). |
+| Carpeta de salida del bundle del cliente | `.output/public` en el build local (preset de Node); en Vercel el build lo hace la plataforma. La verificación 3 se hace sobre `.output/public`. |
+| Saldo gratuito y modelos elegibles | Saldo informado por `gateway.getCredits()`: 0 (total usado 0). Hay 5 modelos de lenguaje con precio 0: `nvidia/nemotron-3.5-lightning-free`, `reflection/beam`, `humansand/ampersand-v0.1`, `stealth/glyph-cluster` y `recursive/flint-v1.0`. **Los 5 devuelven 403: AI Gateway exige una tarjeta de crédito registrada para desbloquear los créditos gratuitos.** No se ha añadido ninguna tarjeta. |
+| `TRIAGE_MODEL` elegido y opción de razonamiento usada | **Ninguno verificado.** Valor provisional en Vercel y en `.env.local`: `nvidia/nemotron-3.5-lightning-free` (sin confirmar que admita salida estructurada). Razonamiento: `reasoning: 'none'`. |
+| Respuesta, tokens y coste de la llamada con S1 | Sin respuesta del modelo: 403 del Gateway por falta de tarjeta. Coste 0 €. Desde la URL pública, `triageReport` devuelve `unauthorized` con una contraseña incorrecta (tras 1 s) y `server` con la correcta. |
 
 ### Estructura
 

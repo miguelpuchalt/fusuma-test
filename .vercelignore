@@ -1,0 +1,7 @@
+.output
+.tanstack
+.env*
+*.md
+!README.md
+docs
+*.code-workspace

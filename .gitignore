@@ -48,3 +48,6 @@ fusuma-test.code-workspace
 .env*
 !.env.example
 .nitro/
+
+.vercel
+.env*
