@@ -124,7 +124,7 @@ Ninguna que bloquee el MVP. La pregunta de producción (dónde serializar el pro
     *   los 9 avisos entran en el feed como «En cola» y se procesan de uno en uno («Procesando», «Asignado a INC-n»);
     *   las tarjetas se crean o se actualizan después de cada aviso;
     *   mientras la cola procesa, «Reiniciar», el cambio de modo y las acciones de las tarjetas están desactivados;
-    *   el tablero termina con los incidentes del guion, todos en `Pendiente`.
+    *   el tablero termina con los incidentes del guion, según el criterio de coincidencia del archivo 9, todos en `Pendiente`.
 
 ### CUJ 2: Un aviso manual se agrupa
 
@@ -547,7 +547,7 @@ Una ruta (`/`), componentes de shadcn/ui:
 
 *   **Pros**: tipos más precisos.
 *   **Cons**: si la salida estructurada del proveedor no admite uniones, la validación fallaría.
-*   **Reason for Rejection**: Rejected by author: un objeto plano con `null` funciona con más proveedores; se comprueba el día 1.
+*   **Reason for Rejection**: Rejected by author: un objeto plano con `null` funciona con más proveedores; se comprueba en la fase 0, con `AiDecisionSchema` real.
 
 #### Alternative J: Categorías «Otro» y «Falsa Alarma»
 
@@ -601,7 +601,7 @@ Una ruta (`/`), componentes de shadcn/ui:
 ## Non-Functional Requirements
 
 - **Seguridad:** la clave del Gateway y `DEMO_PASSWORD` solo existen en el servidor (ninguna variable con prefijo `VITE_`); entrada validada con Zod; respuesta de la IA saneada; datos ficticios.
-- **Rendimiento:** una llamada por aviso; ráfaga de unos 20-40 s con la IA real (se mide el día 1) y unos 8 s sin API. Estimación aproximada: 20.000-25.000 tokens de entrada por ráfaga.
+- **Rendimiento:** una llamada por aviso; ráfaga de unos 20-40 s con la IA real (se mide en la fase 0 o en la fase 6) y unos 8 s sin API. Estimación aproximada: 20.000-25.000 tokens de entrada por ráfaga.
 - **Despliegue:** cada push a `main` despliega en Vercel; se vuelve atrás promoviendo el despliegue anterior.
 
 ## Future Improvements
@@ -727,10 +727,17 @@ Los nombres concretos de funciones y opciones que dependen de la versión no se 
 
 #### Configuración
 
-1. **`package.json`, `package-lock.json`, `tsconfig.json`, `vite.config.ts`** (Create, desde la plantilla oficial). Añaden `ai`, `zod` (3.25 o posterior), `zustand`, Tailwind v4, shadcn/ui y `vitest`. Scripts: `dev`, `build`, `start`, `test` (`vitest run`), `typecheck` (`tsc --noEmit`). `strict: true`. La configuración del destino de Vercel y de `maxDuration` se comprueba en la fase 0.
-2. **`components.json`** (Create con `npx shadcn init`).
-3. **`.env.example`** (Create): `AI_GATEWAY_API_KEY` (solo en local; en Vercel, OIDC), `TRIAGE_MODEL` (versión exacta) y `DEMO_PASSWORD` (12 caracteres o más).
-4. **`.gitignore`** (Create): `node_modules/`, `.env*` salvo `.env.example`, `.output/`, `.vercel/`, `dist/`.
+1. **`package.json`, `package-lock.json`, `tsconfig.json`, `vite.config.ts`** (Create, desde la plantilla oficial generada en una carpeta temporal).
+   - **Dependencias:** se añaden `ai`, `zod` (versión mayor según «Decisiones de API fijadas»), `zustand`, Tailwind v4, shadcn/ui y `vitest`, todas con versiones exactas.
+   - **Scripts:** `dev`, `build`, `start`, `test` (`vitest run`) y `typecheck` (`tsc --noEmit`).
+   - **`tsconfig.json`:** `strict: true` y alias `@/*` → `src/*`, el que usa shadcn.
+   - **`vite.config.ts`:** el despliegue en Vercel con Nitro y `maxDuration` se configuran como indique la guía oficial; si la guía exige otro archivo, se anota en el registro de la fase 0.
+2. **`components.json`** (Create con `npx shadcn init`, con el alias `@/*`).
+3. **`.env.example`** (Create): `AI_GATEWAY_API_KEY` (solo en local; en Vercel, OIDC), `TRIAGE_MODEL` (ID fijado en la fase 0) y `DEMO_PASSWORD` (12 caracteres o más).
+4. **`.gitignore`** (Modify, ya existe): se añaden `.env*` y `!.env.example`; se conserva el resto, que ya ignora `node_modules/`, `.output/`, `.vercel/` y `dist/`.
+37. **`src/lib/utils.ts`** (Create con `npx shadcn init`): `cn`, que usan los componentes de shadcn.
+38. **`src/routeTree.gen.ts`** (generado por el router de TanStack Start; se versiona para que `npm run typecheck` funcione en un clon limpio).
+39. **`vitest.config.ts`** (Create **solo si** Vitest falla al cargar el plugin de Start desde `vite.config.ts`): sin plugins, entorno `node` y alias `@`.
 
 #### Datos
 
@@ -746,7 +753,23 @@ Los nombres concretos de funciones y opciones que dependen de la versión no se 
     | `notify`: solo informar a los usuarios | Notificación a ocupantes de Torre Central | Notificación a ocupantes del Anexo A | Notificación a ocupantes de Laboratorios |
 
 7. **`src/data/categories.ts`** (Create): las 4 categorías iniciales oficiales (`fire-smoke`, `electrical`, `medical`, `security`).
-8. **`src/data/fallback-fixtures.ts`** (Create): una respuesta pregrabada por clave S1 a S9, con `targetAnchor` y `relatedAnchor` en lugar de IDs (A: ancla S1; D: ancla S3; B se relaciona con S1). Usa siempre el valor esperado del archivo 9. La gravedad de A sube S1 Media → S2 Alta → S4 Alta → S7 Crítica; la categoría nueva de S9 se llama «Fuga de agua».
+8. **`src/data/fallback-fixtures.ts`** (Create): una respuesta pregrabada por clave S1 a S9, con `targetAnchor` y `relatedAnchor` en lugar de IDs (A: ancla S1; D: ancla S3; B se relaciona con S1).
+   - Usa solo el **valor principal** de la tabla de resultados esperados del archivo 9, es decir, el que va fuera del paréntesis.
+   - Gravedad propuesta en cada aviso:
+     - S1: Media;
+     - S2: Alta;
+     - S4: Alta;
+     - S7: Crítica;
+     - S6: Alta;
+     - S8: Media;
+     - S3: Media;
+     - S5: Media;
+     - S9: Media.
+   - Protocolo:
+     - S1, S2, S4 y S7: `evac-plan`;
+     - S6: `evac-nearest`;
+     - S3, S5, S8 y S9: `notify`.
+   - La categoría nueva de S9 se llama «Fuga de agua».
 9. **`src/data/burst-script.ts`** (Create): el guion y los resultados esperados. **Fixtures de demostración, no recomendaciones de seguridad.**
 
     | Clave | Edificio, planta | Texto | Grupo |
@@ -770,7 +793,13 @@ Los nombres concretos de funciones y opciones que dependen de la versión no se 
     | Alta | Riesgo posible para las personas o propagación probable (humo en zonas de paso, varias personas afectadas). |
     | Crítica | Peligro activo con riesgo inmediato para la vida (llamas, humo denso que se extiende, personas atrapadas). |
 
-    **Resultados esperados.** Agrupación, relación y categoría deben coincidir; gravedad y protocolo se aceptan dentro del rango.
+    **Resultados esperados.** El valor principal va fuera del paréntesis; el rango o la alternativa, dentro.
+
+    **Criterio de coincidencia.** Es el único criterio, y lo usan el Goal 1, el CUJ 1, la fase 6 y la verificación manual. Una ráfaga con la IA real coincide con el guion si se cumplen dos condiciones:
+    - la agrupación, la relación y la categoría son exactamente las de la tabla (en E vale cualquiera de los dos nombres);
+    - la gravedad final y el protocolo de cada incidente están dentro del rango o son la alternativa.
+
+    El modo sin API usa siempre los valores principales y coincide exactamente (test 34).
 
     | Grupo | Avisos | Categoría | Gravedad (rango) | Protocolo (alternativa) | Relación |
     |---|---|---|---|---|---|
@@ -795,29 +824,41 @@ Los nombres concretos de funciones y opciones que dependen de la versión no se 
 15. **`src/ai/contract.ts`** (Create): `AiDecisionSchema` (Zod), `checkCrossFieldRules`, `buildAliases` y `sanitizeDecision` (paso 7 del Technical Plan §5).
 16. **`src/ai/prompt.ts`** (Create): `PROMPT_VERSION`, `buildSystemPrompt()` con las siete partes y `buildUserPrompt(input, aliases, flags)` con los avisos entre etiquetas `<aviso>…</aviso>`.
 17. **`src/server/llm-client.ts`** (Create): `callTriageModel(system, user)`. Es el único archivo que importa `ai`. Configuración del paso 5 y traducción de errores del paso 8.
-18. **`src/server/triage-report.ts`** (Create): la Server Function con los pasos 1 a 9, incluido el contador del límite de peticiones y la comprobación de la contraseña con `timingSafeEqual`.
+18. **`src/server/triage-report.ts`** (Create): la Server Function `createServerFn({ method: 'POST' })` con los pasos 1 a 9, incluidos:
+    - el contador del límite de peticiones;
+    - la comprobación de la contraseña, comparando con `timingSafeEqual` los SHA-256 de las dos cadenas.
+
+    En la fase 0 solo tiene los pasos 1, 2 y 5.
 
 #### Motores, store y cola
 
 19. **`src/engines/llm-engine.ts`** (Create): `createLlmEngine(getPassword)`.
-20. **`src/engines/fallback-engine.ts`** (Create): `createFallbackEngine(getState)`; traduce las anclas al `incidentId` actual del aviso con esa clave.
-21. **`src/store/triage-store.ts`** (Create): `useTriageStore` sin persistencia, con `TriageState`, `running`, `demoPassword` y `passwordPrompt`. Genera los UUID al llamar al dominio.
+20. **`src/engines/fallback-engine.ts`** (Create): `createFallbackEngine(getState, sleep)`. Traduce las anclas al `incidentId` actual del aviso con esa clave. La espera de unos 600 ms usa el `sleep` inyectado, para que el test no tenga que esperar de verdad.
+21. **`src/store/triage-store.ts`** (Create):
+    - `useTriageStore`, sin persistencia, con `TriageState`, `running`, `demoPassword` y `passwordPrompt`;
+    - exporta la instancia única `triageQueue = createTriageQueue({ … })`, con `uuid = crypto.randomUUID`;
+    - exporta las acciones:
+      - `setMode`;
+      - `resetDemo`, que usa `createInitialState(mode)`, conserva `demoPassword` y pone `passwordPrompt ← null`;
+      - `setPassword`, que llama a `triageQueue.submitPassword`.
 22. **`src/queue/triage-queue.ts`** (Create): `createTriageQueue({ getState, setState, getEngine, sleep, uuid })` con `drain()`, `submitManualReport`, `startBurst`, `retry` y `submitPassword`, según el pseudocódigo del Technical Plan §8.
 
 #### Interfaz
 
 23. **`src/routes/__root.tsx`** (Create): `<html lang="es">`, estilos y metadatos.
-24. **`src/routes/index.tsx`** (Create): la página con cabecera, panel, feed y tablero; importa los datos maestros directamente.
+24. **`src/routes/index.tsx`** (Create): la página con cabecera, panel, feed y tablero; importa los datos maestros directamente. En la fase 0 contiene solo el botón temporal que llama a `triageReport`; ese botón se quita en la fase 5.
 25. **`src/router.tsx`** y **`src/styles/app.css`** (Create): los de la plantilla, más cuatro colores de gravedad.
 26. **`src/components/ControlPanel.tsx`** (Create): formulario de aviso, «Simular ráfaga», «Reiniciar demo» con confirmación, interruptor de modo y progreso, con las reglas de activación del Technical Plan §8 y §9.
 27. **`src/components/ReportFeed.tsx`** (Create): el feed con estado y «Reintentar».
 28. **`src/components/IncidentBoard.tsx`** e **`IncidentCard.tsx`** (Create): columnas y tarjetas según el Technical Plan §9.
 29. **`src/components/EditIncidentDialog.tsx`** y **`PasswordDialog.tsx`** (Create): edición (categoría de `visibleCategories`, gravedad, protocolo, resumen) y contraseña.
-30. **`src/components/ui/*`** (Create con shadcn): `button`, `card`, `badge`, `dialog`, `alert-dialog`, `select`, `textarea`, `label`, `switch`, `tooltip`.
+30. **`src/components/ui/*`** (Create con shadcn): `button`, `card`, `badge`, `dialog`, `alert-dialog`, `select`, `textarea`, `input`, `label`, `switch`, `tooltip`.
 
 #### Tests
 
 31. **`src/domain/apply-decision.test.ts`** (Create):
+    *   un aviso que no existe o que no está `processing` no cambia el estado;
+    *   `join` a un incidente `pending` de otra planta → incidente nuevo relacionado con él;
     *   `join` válido: asigna, actualiza campos no bloqueados, gravedad con `max`, no cambia la relación del destino;
     *   campos bloqueados no cambian; con la categoría bloqueada no se crea una categoría nueva;
     *   `join` a un incidente validado → incidente nuevo relacionado; a uno descartado → sin relación; a un destino `null` → incidente nuevo;
@@ -832,22 +873,40 @@ Los nombres concretos de funciones y opciones que dependen de la versión no se 
     *   un error deja el aviso en error y la cola sigue;
     *   sin contraseña en modo IA, se detiene antes de llamar;
     *   ante `unauthorized`, el aviso vuelve a la cola en su posición y la cola se detiene;
-    *   un aviso encolado durante el procesamiento se procesa en el mismo `drain()`.
+    *   un aviso encolado durante el procesamiento se procesa en el mismo `drain()`;
+    *   `retry` de un aviso en error lo vuelve a procesar después de los que ya estaban en cola;
+    *   si `propose` lanza una excepción, el aviso queda en error `server` y la cola sigue.
 
 #### Documentación
 
-36. **`README.md`** (Create): qué es y advertencia de datos ficticios; cómo ejecutarlo; diagrama de arquitectura y de un aviso en Mermaid; reglas del dominio; limitaciones conocidas; hoja de ruta; guion de la demo.
+36. **`README.md`** (Modify, ya existe con solo el título): qué es y advertencia de datos ficticios; cómo ejecutarlo; diagrama de arquitectura y de un aviso en Mermaid; reglas del dominio; limitaciones conocidas; hoja de ruta; guion de la demo.
 
 ### Verification Plan
 
 *   **Build:** `npm run typecheck` y `npm run build` sin errores; despliegue de vista previa en cada push.
 *   **Unit Tests:** `npm test` (archivos 31 a 35).
-*   **Cobertura:** sin porcentaje. Cada regla de `applyDecision`, cada fila de elegibilidad, cada regla de saneado, la ráfaga sin API y el comportamiento básico de la cola tienen al menos un test.
+*   **Cobertura:** sin porcentaje. Tienen al menos un test:
+    *   cada regla de `applyDecision`;
+    *   cada fila de elegibilidad;
+    *   cada regla de saneado;
+    *   la ráfaga sin API;
+    *   los casos de la cola del archivo 35.
+*   **CUJ por modo** (lo usan las fases 5 y 7):
+
+    | CUJ | Modo sin API | Modo IA | ¿URL pública? |
+    |---|---|---|---|
+    | 1, 4, 5, 6 | sí | sí | sí |
+    | 2, 3 | no (sin formulario) | sí | sí |
+    | 7 | no (no hay errores) | sí, en local | no: test 35 más una ejecución local con un `TRIAGE_MODEL` no válido, que da `server` y se puede reintentar |
+    | 8 | sí | no | sí |
+    | 9 | no (sin contraseña) | sí | sí |
+
+    Si la fase 0 no encontró un modelo sin coste, solo se recorren los CUJ de la columna «Modo sin API» y el CUJ 9, porque la contraseña se comprueba antes de llamar al modelo. Los demás quedan como limitación documentada (R2).
 *   **Manual:**
-    1. En la URL pública, recorrer los CUJ 1 a 9 en modo IA y en modo sin API.
-    2. Tres ráfagas reales seguidas con las agrupaciones del guion antes de la entrevista (se repite la mañana de la entrevista).
-    3. Buscar en `.output/public` que no aparezcan los valores de `DEMO_PASSWORD` ni de `AI_GATEWAY_API_KEY`.
-    4. Comprobar en la consola del navegador que no hay avisos de hidratación.
+    1. En la URL pública, recorrer los CUJ de la tabla anterior, cada uno en su modo.
+    2. Antes de la entrevista, tres ráfagas reales con 1 minuto de espera entre ellas, que cumplan el criterio de coincidencia del archivo 9. Se repite la mañana de la entrevista. Solo se hace si hay un modelo sin coste.
+    3. Buscar en la carpeta de salida del bundle del cliente, anotada en el registro de la fase 0, que no aparezcan los valores de `DEMO_PASSWORD` ni de `AI_GATEWAY_API_KEY`.
+    4. Comprobar en la consola del navegador que no hay advertencias de hidratación (hydration mismatch).
 
 --------------------------------------------------------------------------------
 

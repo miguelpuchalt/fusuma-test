@@ -196,3 +196,52 @@ C1 (modelos candidatos), C2 (= K2), C3 y C4 (referencias del brief explicadas y 
 - Rebatidos: 2 (R1, n10).
 - Rechazados: 1 (n12, en parte).
 - Escalados: 0.
+
+## Resolución de las etapas 8 y 9 (pasada final)
+
+**Fuentes:**
+- `intermediate_zoom_out_report.md` (etapa 8);
+- `implementation_readiness_report.md` (etapa 9).
+
+**Alcance:** I1 a I8 y los defectos reales menores m1 a m4. Solo se ha editado `docs/designs/emergency_triage.md`. No se ha escrito código ni se ha inicializado el proyecto.
+
+**Decisión del autor que modifica I1:** el coste es 0 €.
+- No se compran créditos, no se contrata ningún plan y no se usa BYOK.
+- Si no hay un modelo elegible que funcione sin coste, se registra el resultado y la demo usa el modo sin API.
+
+| Hallazgo | Cambio en el diseño | Dónde |
+|---|---|---|
+| I1 | Nueva subsección «Fase 0 en detalle»: <ul><li>saldo gratuito y modelos elegibles;</li><li>prueba de un modelo elegible con salida estructurada;</li><li>registro del ID, la respuesta y el coste;</li><li>`curl` para comprobar el SSR;</li><li>variables de entorno en Vercel;</li><li>botón temporal con `AiDecisionSchema` real;</li><li>sin modelo sin coste, modo sin API y ningún pago.</li></ul> La fase 0 pasa de 2 a 2,25 h y la fase 2, de 3 a 2,75 h. Se actualizan R2, la Alternativa L, el Goal 6 y el Goal 1. | Detailed Implementation Plan; Goals; Alternatives; Risks |
+| I2 | Nueva subsección «Decisiones de API fijadas»: <ul><li>POST;</li><li>`safeParse` dentro de la función;</li><li>`maxRetries: 0`;</li><li>`AbortSignal.timeout(15_000)`;</li><li>esquema sin límites de longitud;</li><li>orden de clasificación de errores;</li><li>SHA-256 con `timingSafeEqual`;</li><li>versiones exactas.</li></ul> Los nombres que dependen de la versión se toman de la versión instalada y se anotan en la tabla «Registro de la fase 0». | §5 pasos 2, 3, 5, 6 y 8; archivos 17 y 18 |
+| I3 | Despliegue según la guía oficial de TanStack Start para Vercel con Nitro; se comprueba en el panel de Vercel que `maxDuration` es de 30 s; la carpeta de salida queda registrada y la usa la verificación 3. | Fase 0; archivo 1; Verification Plan |
+| I4 | `.gitignore` y `README.md` pasan a **Modify**; la plantilla se genera en una carpeta temporal. | Archivos 4 y 36; fase 0 |
+| I5 | Un único «criterio de coincidencia»; la fase 6 solo toca `prompt.ts` y sube `PROMPT_VERSION`; 1 minuto entre ráfagas; si no se consigue, se anota en el README. | Archivo 9; fase 6; CUJ 1; Verification Plan |
+| I6 | Las respuestas pregrabadas usan el valor principal, con la gravedad y el protocolo explícitos para S1 a S9. | Archivo 8 |
+| I7 | Columna «Archivos» en la tabla de fases; las salidas de las fases 1 a 4 nombran sus tests. | Tabla de fases |
+| I8 (M1) | 1 minuto entre ráfagas reales. | R3; fase 6; limitaciones; verificación 2 |
+| I8 (M2) | Tabla «CUJ por modo» con la columna de URL pública; el CUJ 7 se cubre con el test 35 y una ejecución local con un `TRIAGE_MODEL` no válido. | Verification Plan; fases 5 y 7 |
+| I8 (M3) | R2 dice qué cubre el modo sin API y qué no (avisos manuales y análisis con IA). | R2; limitaciones; fase 0 |
+| I8 (M4) | El diálogo de contraseña no se puede cerrar; para salir, se recarga la página. | CUJ 9; §8; limitaciones |
+| I8 (N1) | `createInitialState(mode)`; el reinicio conserva el modo y `demoPassword` y cierra el diálogo. | §7; archivo 21 |
+| I8 (N2) | `drain()` convierte cualquier excepción de una vuelta en `markError(report, "server")`. | §8; test 35 |
+| m1 | Archivos 37 (`src/lib/utils.ts`), 38 (`src/routeTree.gen.ts`) y 39 (`vitest.config.ts`, solo si hace falta); `input` en el archivo 30. | Lista de archivos |
+| m2 | `triage-store.ts` exporta `triageQueue`, `setMode`, `resetDemo` y `setPassword`. | Archivo 21 |
+| m3 | Tests nuevos: <ul><li>aviso que no existe o que no está en `processing`;</li><li>`join` a un `pending` de otra planta;</li><li>`retry` al final;</li><li>excepción en `propose`.</li></ul> Además, la firma `createFallbackEngine(getState, sleep)`. | Archivos 20, 31 y 35 |
+| m4 | Alias `@/*` en `tsconfig.json` y `components.json`. | Archivos 1 y 2 |
+| N3 (de paso) | El comentario de `seq` ya dice que «Reintentar» asigna uno nuevo. | §2 |
+
+**Comprobaciones finales:**
+- **Horas:** las fases suman 24 h (2,25 + 4 + 2,75 + 1,5 + 1,5 + 6 + 1,5 + 2 + 2,5).
+- **Archivos:** los 39 tienen una fase asignada:
+  - 16 también en la fase 6;
+  - 15, 17, 18 y 24 tienen además una versión provisional en la fase 0.
+- **Condiciones de salida:** todas se pueden cumplir también sin un modelo sin coste. En ese caso, la fase 2 exige solo el test 33, la fase 6 no se hace y la tabla «CUJ por modo» limita el recorrido.
+- **Sin restos de lo anterior:** no quedan «toda la demo», «versión exacta» del modelo, «CUJ 1 a 9 en ambos modos» ni `.output/public`.
+
+**Sin cambios:**
+- N4 (`burstProgress`) y N5 (`createdCategory`), por ser mejoras opcionales;
+- los menores de estilo m5 a m16 del informe de la etapa 9.
+
+No se reincorporan persistencia, reintentos automáticos, recuperación avanzada, BYOK ni funcionalidades nuevas.
+
+**Estado:** el diseño queda cerrado. Siguiente paso: pedir autorización para implementar la fase 0.
