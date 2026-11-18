@@ -245,3 +245,42 @@ C1 (modelos candidatos), C2 (= K2), C3 y C4 (referencias del brief explicadas y 
 No se reincorporan persistencia, reintentos automáticos, recuperación avanzada, BYOK ni funcionalidades nuevas.
 
 **Estado:** el diseño queda cerrado. Siguiente paso: pedir autorización para implementar la fase 0.
+
+## Cambio de proveedor de IA y fase 1
+
+**Decisión definitiva del autor:** se deja de usar Vercel AI Gateway. La IA se llama directamente a la Gemini Developer API con el proveedor oficial `@ai-sdk/google` del AI SDK. Es una **desviación deliberada del enunciado** y queda documentada como tal.
+
+**Motivo:** en la fase 0, AI Gateway devolvió un 403 en sus 5 modelos de precio 0, porque exige una tarjeta de crédito registrada para desbloquear los créditos gratuitos. El objetivo de coste es 0 € sin tarjeta, sin planes y sin pagos.
+
+**Qué se mantiene:** React, TypeScript, TanStack Start con SSR, shadcn/ui, Vercel AI SDK y despliegue en Vercel. El resto del alcance del MVP no cambia.
+
+| Cambio en `docs/designs/emergency_triage.md` | Dónde |
+|---|---|
+| Nueva sección «Desviación del enunciado: sin AI Gateway», con motivo, decisión, qué se mantiene, qué cambia, coste de volver atrás y configuración prevista para la fase 2 | Overview |
+| Stack y requisito 1 de los obligatorios: AI Gateway queda fuera por decisión del autor | Overview; Goals |
+| Goal 6: nivel gratuito de la Gemini Developer API, `GOOGLE_GENERATIVE_AI_API_KEY` solo en el servidor, sin facturación, planes ni pagos | Goals |
+| Non-Goal nuevo: sin AI Gateway | Non-Goals |
+| Diagrama y resumen: el servidor llama a la Gemini Developer API con `@ai-sdk/google` | Technical Plan |
+| Alternativa L reescrita: «Vercel AI Gateway (lo que pide el enunciado)», rechazada por el autor | Alternatives |
+| R2 reescrito para el nivel gratuito de Gemini (disponibilidad y cuota); R9 nuevo para la desviación; Seguridad con la nueva variable | Risks; NFR |
+| Future Improvements: migrar al Gateway cuando haya créditos | Future Improvements |
+| Fase 0: nota «Resultado y cambio de proveedor». La llamada real a la IA pasa a la fase 2. La fase 2 incluye instalar `@ai-sdk/google`, configurar la clave y comprobar la disponibilidad y la cuota. | Detailed Implementation Plan |
+| Registro de la fase 0: las filas del Gateway quedan como histórico y `TRIAGE_MODEL` pasa a «se fija en la fase 2» | Registro de la fase 0 |
+| Archivo 3 (`.env.example`) y verificación 3: `GOOGLE_GENERATIVE_AI_API_KEY` en lugar de `AI_GATEWAY_API_KEY`. El archivo se actualizará en la fase 2. | Lista de archivos; Verification Plan |
+| Decisiones de API fijadas: nuevo apartado «Proveedor» | Detailed Implementation Plan |
+
+**No se ha hecho, por orden expresa:**
+- no se ha instalado `@ai-sdk/google`;
+- no se ha tocado la integración temporal de la fase 0;
+- no se ha configurado ninguna variable de entorno nueva;
+- `.env.example` y las variables de Vercel siguen con los valores de la fase 0 (la variable `TRIAGE_MODEL` de Vercel tiene un ID de AI Gateway que ya no sirve).
+
+**Fase 1 (dominio), implementada:**
+- **Archivos:** 5, 6, 7 (datos maestros), 10 a 14 (`types`, `rules`, `apply-decision`, `actions`, `selectors`) y tests 31 y 32. También el 39 (`vitest.config.ts`).
+- **Resultado:** 59 tests en verde, `typecheck` y `build` sin errores. Se comprobó con dos mutaciones que los tests detectan fallos en `canRelate` y en la regla de la gravedad.
+- **Decisiones de implementación que el diseño dejaba abiertas:**
+  - `createReport(state, input)` devuelve `{ state, report }` y solo asigna `seq`; `enqueueReports(state, reports, burst)` inserta los avisos y fija `burstStartSeq`.
+  - `applyDecision` lanza un error si la categoría existente o el protocolo no existen. El servidor lo impide con `invalid_ref`, y la cola lo convertiría en un error `server` del aviso.
+  - `editIncident` rechaza sin cambiar nada una categoría no visible o un protocolo desconocido.
+  - `retryReport` no reintenta `invalid_input`.
+  - `src/domain/` solo importa constantes de `src/data/`; la tabla de estructura del diseño lo dice así.

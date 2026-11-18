@@ -14,7 +14,7 @@ Es la entrega de una prueba técnica de un proceso de selección: 2 días, unas 
 
 **Criterio de diseño.** La prioridad es un recorrido completo, desplegado y demostrable de principio a fin. Se prefiere una aplicación pequeña con limitaciones conocidas y documentadas antes que mecanismos que no lleguen a implementarse. Cada funcionalidad tiene que justificar su coste frente a lo que aporta a la demo.
 
-El stack lo fija el enunciado: React, TypeScript, **TanStack Start con SSR**, shadcn/ui, Vercel AI SDK y Vercel AI Gateway, con despliegue en Vercel (plan Hobby). El objetivo de coste es 0 €. El código vive en este repositorio (`fusuma-test`).
+El stack lo fija el enunciado: React, TypeScript, **TanStack Start con SSR**, shadcn/ui, Vercel AI SDK y Vercel AI Gateway, con despliegue en Vercel (plan Hobby). **Desviación deliberada:** la IA se llama directamente a la Gemini Developer API con `@ai-sdk/google`, sin AI Gateway (ver «Desviación del enunciado»). El objetivo de coste es 0 €. El código vive en este repositorio (`fusuma-test`).
 
 ### Relación con documentos anteriores
 
@@ -29,6 +29,21 @@ El stack lo fija el enunciado: React, TypeScript, **TanStack Start con SSR**, sh
 | La respuesta de la IA no tiene campo `confidence`. | Sustituye al esquema inicial del brief. |
 | Se agrupa solo en el mismo edificio y la misma planta; otras plantas se relacionan. | Concreta la regla del brief. |
 | Contraseña de demo compartida, validada en el servidor. | El brief la dejaba como opcional. |
+
+### Desviación del enunciado: sin AI Gateway
+
+El enunciado pide Vercel AI Gateway. **Este diseño se aparta de ese requisito de forma deliberada.**
+
+- **Por qué:** en la fase 0, AI Gateway devolvió un 403 en sus 5 modelos de precio 0. Exige una tarjeta de crédito registrada para desbloquear los créditos gratuitos, y el objetivo de coste es 0 € sin tarjeta, sin planes y sin pagos.
+- **Decisión del autor:** la IA se llama directamente a la Gemini Developer API con el proveedor oficial `@ai-sdk/google` del AI SDK, en su nivel gratuito. No se configura facturación de Google Cloud ni se contrata ningún plan.
+- **Qué se mantiene:** React, TypeScript, TanStack Start con SSR, shadcn/ui, Vercel AI SDK y despliegue en Vercel.
+- **Qué cambia:** el requisito 1 de los obligatorios queda cumplido salvo AI Gateway. Hay que decirlo en el README y en la entrevista, sin presentarlo como cumplido.
+- **Coste de volver atrás:** pequeño. Solo `src/server/llm-client.ts` importa el AI SDK, y con el Gateway el modelo se indica con una cadena `proveedor/modelo`.
+- **Configuración prevista (fase 2):**
+  - paquete `@ai-sdk/google`, en una versión compatible con `ai` 7.0.176;
+  - variable `GOOGLE_GENERATIVE_AI_API_KEY`, solo en el servidor;
+  - un modelo Gemini del nivel gratuito, elegido tras comprobar su disponibilidad y su cuota;
+  - `generateText` con `Output.object()` y `AiDecisionSchema`, `maxRetries: 0`, timeout de 15 s y la clasificación de errores ya definida.
 
 ## The Problem
 
@@ -62,7 +77,7 @@ La IA no decide, solo propone. El código garantiza que **ninguna referencia inv
 
 ### Requisitos obligatorios (enunciado)
 
-1. Stack: React, TypeScript, TanStack Start con SSR, shadcn/ui, AI SDK, AI Gateway y despliegue en Vercel con una URL pública.
+1. Stack: React, TypeScript, TanStack Start con SSR, shadcn/ui, AI SDK y despliegue en Vercel con una URL pública. **AI Gateway queda fuera por decisión del autor** (ver «Desviación del enunciado»).
 2. Recepción manual de avisos (edificio, planta, texto) y simulación de una ráfaga de avisos ficticios.
 3. Análisis con IA: clasificación, gravedad, agrupación semántica, resumen y protocolo recomendado.
 4. Categorías nuevas propuestas por la IA con aprobación humana.
@@ -71,12 +86,12 @@ La IA no decide, solo propone. El código garantiza que **ninguna referencia inv
 
 ### Funcionalidades esenciales del MVP
 
-1. **Recorrido de la ráfaga.** «Simular ráfaga» encola 9 avisos del guion, que se procesan de uno en uno y terminan en las agrupaciones de la tabla «Guion de la ráfaga». Antes de la entrevista se comprueba a mano con el modo sin API y, si la fase 0 encontró un modelo sin coste, con la IA real. No es una evaluación estadística del modelo.
+1. **Recorrido de la ráfaga.** «Simular ráfaga» encola 9 avisos del guion, que se procesan de uno en uno y terminan en las agrupaciones de la tabla «Guion de la ráfaga». Antes de la entrevista se comprueba a mano con el modo sin API y, si la fase 2 consiguió una llamada real con un modelo Gemini gratuito, con la IA real. No es una evaluación estadística del modelo.
 2. **Ninguna referencia inventada llega al estado.** Los alias que la IA no recibió se descartan o producen un error; un incidente no elegible nunca recibe el aviso.
 3. **La persona tiene la última palabra.** Un campo editado a mano queda bloqueado frente a la IA; la IA nunca baja la gravedad de un incidente; solo una persona valida o descarta.
 4. **Modo sin API determinista.** Seleccionable con el tablero vacío; reproduce la ráfaga con 9 respuestas pregrabadas y siempre da el mismo resultado.
 5. **Errores visibles y recuperables a mano.** Un error de la IA deja el aviso marcado con su tipo y un botón «Reintentar»; la cola sigue con el siguiente.
-6. **Coste 0 € y claves protegidas.** El saldo gratuito de AI Gateway (se comprueba en la fase 0; no se compran créditos, no se contrata ningún plan y no se usa BYOK) y Vercel Hobby. La clave del Gateway solo existe en el servidor; las llamadas a la IA exigen una contraseña de demo.
+6. **Coste 0 € y claves protegidas.** El nivel gratuito de la Gemini Developer API (se comprueba su disponibilidad y su cuota en la fase 2; sin facturación de Google Cloud, sin planes y sin pagos) y Vercel Hobby. `GOOGLE_GENERATIVE_AI_API_KEY` solo existe en el servidor; las llamadas a la IA exigen una contraseña de demo.
 7. **Arquitectura explicable.** Reglas de negocio en funciones de TypeScript puro con tests; el motor de IA y el modo sin API implementan la misma interfaz; README con diagramas.
 
 ### Guion de la ráfaga: agrupaciones esperadas
@@ -108,6 +123,7 @@ La IA no decide, solo propone. El código garantiza que **ninguna referencia inv
 - **Sin agrupación entre plantas** ni incidentes con varias plantas.
 - **Sin estado `Resuelto`.** `Validado` significa «propuesta aprobada».
 - **Sin creación ni borrado de categorías a mano.** «Cambiar categoría» elige entre las existentes.
+- **Sin AI Gateway** (desviación deliberada del enunciado; ver «Desviación del enunciado»).
 - **Sin base de datos, varios usuarios, cuentas, vista móvil, audio, event sourcing ni arrastrar tarjetas.**
 
 ## Open Questions
@@ -202,7 +218,7 @@ Ninguna que bloquee el MVP. La pregunta de producción (dónde serializar el pro
 Tres partes:
 
 1. **Cliente.** React para la interfaz, un store de Zustand con el estado en memoria y una cola que procesa los avisos de uno en uno.
-2. **Servidor.** Una Server Function de TanStack Start, sin estado, que llama a la IA a través de AI Gateway, valida la respuesta y devuelve una decisión con IDs reales o un error tipado.
+2. **Servidor.** Una Server Function de TanStack Start, sin estado, que llama a la Gemini Developer API con el AI SDK y `@ai-sdk/google`, valida la respuesta y devuelve una decisión con IDs reales o un error tipado.
 3. **Dominio.** Tipos y reglas en TypeScript puro, sin React ni AI SDK. Lo usan el cliente, el servidor y los tests.
 
 Flujo de un aviso:
@@ -224,7 +240,7 @@ flowchart LR
     Queue -->|applyDecision| Store
   end
   Llm -->|contraseña + aviso + contexto| SF["Server Function triageReport<br/>límite · contraseña · validación<br/>alias · saneado"]
-  SF --> GW["AI Gateway"] --> M["Modelo (TRIAGE_MODEL)"]
+  SF --> GM["Gemini Developer API<br/>@ai-sdk/google · TRIAGE_MODEL"]
   SF -->|TriageResult| Llm
   Dom["Dominio (TS puro)"] -.-> Store
   Dom -.-> SF
@@ -423,6 +439,8 @@ TriageInput { report, contextIncidents: { incident, reports[] }[], categories }
 5. **Categoría nueva:** si el nombre normalizado ya existe, se reutiliza; si no, se crea no oficial y se devuelve como `createdCategory`.
 6. El aviso pasa a `done`.
 
+Si la categoría existente o el protocolo de la decisión no existen, `applyDecision` lanza un error. El servidor lo impide con `invalid_ref`, así que es un error de programación, y la cola lo convierte en un error `server` del aviso (`drain()`, paso con `catch`).
+
 **Acciones del operador** (solo sobre incidentes `pending`): `editIncident` (cada campo editado queda bloqueado; la categoría se elige entre `visibleCategories`), `validateIncident` y `discardIncident`. **Sobre el catálogo:** `approveCategory`, visible en cualquier columna. **Sobre avisos:** `enqueueReports`, `markProcessing`, `markError`, `retryReport` (vuelve a la cola con un `seq` nuevo, al final) y `returnToQueue` (vuelve a la cola conservando su `seq`). **Reinicio:** `createInitialState(mode)`. Conserva el modo actual. El store conserva además `demoPassword` y pone `passwordPrompt ← null`.
 
 ```mermaid
@@ -561,11 +579,11 @@ Una ruta (`/`), componentes de shadcn/ui:
 *   **Cons**: entre 1 y 3 h cada una.
 *   **Reason for Rejection**: Rejected by author: no caben en 24 h; los botones y el README cubren la necesidad.
 
-#### Alternative L: Clave propia de Gemini (BYOK)
+#### Alternative L: Vercel AI Gateway (lo que pide el enunciado)
 
-*   **Pros**: usaría la cuota gratuita de Google.
-*   **Cons**: BYOK en AI Gateway requiere el plan de pago.
-*   **Reason for Rejection**: Rejected by author: el objetivo de coste es 0 € y BYOK exige pagar. Se usa el saldo gratuito del Gateway con un modelo elegible. Si no hay ninguno que funcione sin coste, la demo usa el modo sin API (R2).
+*   **Pros**: cumple el enunciado; en Vercel se autentica por OIDC sin clave; cambiar de modelo es cambiar una cadena.
+*   **Cons**: en la fase 0 devolvió un 403 en los 5 modelos de precio 0, porque exige una tarjeta registrada para desbloquear los créditos gratuitos. BYOK exige además un plan de pago.
+*   **Reason for Rejection**: Rejected by author: el objetivo de coste es 0 € sin tarjeta, sin planes y sin pagos. Se usa la Gemini Developer API directamente con `@ai-sdk/google`. Es una desviación deliberada del enunciado (ver «Desviación del enunciado»).
 
 #### Alternative M: SPA sin SSR
 
@@ -580,12 +598,13 @@ Una ruta (`/`), componentes de shadcn/ui:
 | # | Riesgo | Mitigación | Limitación aceptada |
 |---|---|---|---|
 | R1 | El modelo se desvía del guion en directo (por ejemplo, agrupa S8 con A). | Prompt con ejemplo negativo; ID de modelo fijado en la fase 0; la ráfaga se prueba varias veces antes de la entrevista; el modo sin API reproduce el guion. | Con la IA real no hay garantía de resultado. Si diverge, se usa para enseñar por qué una persona valida. |
-| R2 | No hay saldo gratuito, ningún modelo elegible admite la salida estructurada, o el saldo se agota. | La fase 0 comprueba el saldo y los modelos elegibles y registra el resultado. Sin pagos ni BYOK. Si no hay modelo sin coste, la demo usa el modo sin API. | El modo sin API cubre la ráfaga pregrabada, la gestión de incidentes (editar, validar, descartar), la aprobación de categorías y el reinicio. **No cubre** los avisos manuales ni el análisis con IA. |
+| R2 | El nivel gratuito de Gemini no está disponible para el modelo elegido, no admite la salida estructurada o su cuota (por minuto o por día) se agota. | La fase 2 comprueba disponibilidad y cuota antes de fijar `TRIAGE_MODEL` y registra el resultado. Sin facturación, planes ni pagos. Si no hay modelo gratuito que funcione, la demo usa el modo sin API. | Según las condiciones del nivel gratuito, Google puede usar los datos enviados (a verificar en la fase 2); solo se envían datos ficticios. El modo sin API cubre la ráfaga pregrabada, la gestión de incidentes (editar, validar, descartar), la aprobación de categorías y el reinicio. **No cubre** los avisos manuales ni el análisis con IA. |
 | R3 | Errores de la IA en mitad de la ráfaga (429, timeout). | Error visible por aviso y «Reintentar». Se espera 1 minuto entre ráfagas reales seguidas para no superar el límite de 20 peticiones por minuto. | Varios avisos pueden quedar en error; reintentarlos cambia el orden y el resultado puede no coincidir con el guion. |
 | R4 | Una agrupación errónea no se puede deshacer. | «Ante la duda, separar»; el motivo de cada propuesta es visible. | Corregirla exige descartar el incidente. |
 | R5 | El texto libre de la IA inventa ubicaciones o instrucciones. | Prohibido en el prompt; etiqueta «Texto generado por IA»; el bloque de protocolo sale de los datos maestros. | El texto libre no se verifica. |
 | R6 | Abuso de la URL pública. | Contraseña de al menos 12 caracteres; límite de peticiones antes de la contraseña; 1 s de espera tras un fallo; límites de tamaño y tokens; se cambia la contraseña tras la entrevista. | El límite es por instancia y global: alguien con la URL puede agotar las 20 peticiones por minuto. |
 | R7 | APIs de TanStack Start o AI SDK distintas de lo previsto. | La fase 0 despliega la plantilla oficial con una llamada real y anota las APIs reales en «Decisiones de API fijadas»; versiones exactas en `package.json`; un único archivo usa AI SDK. | — |
+| R9 | La desviación respecto a AI Gateway penaliza la evaluación. | Documentada en «Desviación del enunciado», en el README y en el guion de la entrevista, con el motivo (el Gateway exige una tarjeta para los créditos gratuitos) y el coste de volver atrás. | Un requisito del enunciado queda sin cumplir. |
 | R8 | Las 24 h no alcanzan. | Margen de 2,5 h; las mejoras opcionales solo entran con margen; orden de recorte: pulido visual, luego script de comprobación. | — |
 
 **Limitaciones conocidas** (documentadas en el README, sin código para evitarlas):
@@ -600,7 +619,7 @@ Una ruta (`/`), componentes de shadcn/ui:
 
 ## Non-Functional Requirements
 
-- **Seguridad:** la clave del Gateway y `DEMO_PASSWORD` solo existen en el servidor (ninguna variable con prefijo `VITE_`); entrada validada con Zod; respuesta de la IA saneada; datos ficticios.
+- **Seguridad:** `GOOGLE_GENERATIVE_AI_API_KEY` y `DEMO_PASSWORD` solo existen en el servidor (ninguna variable con prefijo `VITE_`); entrada validada con Zod; respuesta de la IA saneada; datos ficticios.
 - **Rendimiento:** una llamada por aviso; ráfaga de unos 20-40 s con la IA real (se mide en la fase 0 o en la fase 6) y unos 8 s sin API. Estimación aproximada: 20.000-25.000 tokens de entrada por ráfaga.
 - **Despliegue:** cada push a `main` despliega en Vercel; se vuelve atrás promoviendo el despliegue anterior.
 
@@ -609,6 +628,7 @@ Una ruta (`/`), componentes de shadcn/ui:
 - Estado en el servidor (Postgres o Redis) con una cola por edificio para varios operadores; con él, la elegibilidad pasaría a comprobarse con autoridad en el servidor.
 - Persistencia, estado `Resuelto`, «Separar aviso» y registro de auditoría.
 - Recuperación automática de errores y límite de peticiones compartido entre instancias.
+- Migrar a Vercel AI Gateway (requisito del enunciado) cuando haya créditos disponibles, cambiando el proveedor en `src/server/llm-client.ts`.
 - Vista móvil del ocupante, avisos por audio y evaluación formal de la agrupación.
 
 --------------------------------------------------------------------------------
@@ -619,20 +639,22 @@ Una ruta (`/`), componentes de shadcn/ui:
 
 | Fase | Contenido | Archivos | Horas | Condición de salida |
 |---|---|---|---|---|
-| 0. Esqueleto | Ver «Fase 0 en detalle». | 1 a 4, 37, 38 y 39 (si hace falta); versiones provisionales de 15 (solo `AiDecisionSchema`), 17, 18 (solo pasos 1, 2 y 5) y 24 (botón temporal) | 2,25 | Ver «Fase 0 en detalle». |
-| 1. Dominio | Datos maestros, tipos, reglas, `applyDecision`, acciones y selectores. | 5 a 7 y 10 a 14; tests 31 y 32 | 4 | Tests 31 y 32 en verde. |
-| 2. IA y servidor | Guion y rúbrica, contrato, alias, saneado, prompt y Server Function completa (pasos 1 a 9). | 9 y 15 a 18; test 33 | 2,75 | Test 33 en verde. Si la fase 0 encontró un modelo sin coste, el botón temporal recibe una decisión traducida a IDs reales tras los pasos 1 a 9. |
+| 0. Esqueleto | Ver «Fase 0 en detalle». | 1 a 4, 37 y 38; versiones provisionales de 15 (solo `AiDecisionSchema`), 17, 18 (solo pasos 1, 2 y 5) y 24 (botón temporal) | 2,25 | Ver «Fase 0 en detalle». |
+| 1. Dominio | Datos maestros, tipos, reglas, `applyDecision`, acciones y selectores. | 5 a 7, 10 a 14 y 39; tests 31 y 32 | 4 | Tests 31 y 32 en verde, y `npm run typecheck` sin errores. El archivo 39 (`vitest.config.ts`) hizo falta: Vitest falla al salir si carga los plugins de Start desde `vite.config.ts`. |
+| 2. IA y servidor | Guion y rúbrica, contrato, alias, saneado, prompt y Server Function completa (pasos 1 a 9). Se instala `@ai-sdk/google`, se configura `GOOGLE_GENERATIVE_AI_API_KEY` (solo servidor) y se comprueban la disponibilidad y la cuota del modelo Gemini gratuito. | 9 y 15 a 18; test 33 | 2,75 | Test 33 en verde. Si hay un modelo Gemini gratuito disponible, el botón temporal recibe una decisión traducida a IDs reales tras los pasos 1 a 9. Si no, se deja constancia y la demo usa el modo sin API. |
 | 3. Store y cola | Motor de IA, store en memoria y cola. | 19, 21 y 22; test 35 | 1,5 | Test 35 en verde. |
 | 4. Modo sin API | Respuestas pregrabadas y `FallbackEngine`. | 8 y 20; test 34 | 1,5 | Test 34 en verde. |
 | 5. Interfaz | Panel, feed, tablero, tarjetas y diálogos. Se quita el botón temporal. | 23 a 30 | 6 | En local funcionan los CUJ de la tabla «CUJ por modo», cada uno en su modo. |
-| 6. Ajuste del prompt | Ráfagas reales en la interfaz. Solo se modifica `src/ai/prompt.ts` (16), y cada cambio sube `PROMPT_VERSION`. Los archivos 8 y 9 no cambian. Si la fase 0 no encontró un modelo sin coste, esta fase no se hace y sus horas pasan al margen. | 16 | 1,5 | Tres ráfagas reales, con 1 minuto de espera entre una y otra, cumplen el **criterio de coincidencia** (archivo 9). Si no se consigue en 1,5 h, se anota en «Limitaciones conocidas» del README y la ráfaga de la entrevista se hace sin API. |
+| 6. Ajuste del prompt | Ráfagas reales en la interfaz. Solo se modifica `src/ai/prompt.ts` (16), y cada cambio sube `PROMPT_VERSION`. Los archivos 8 y 9 no cambian. Si la fase 2 no consiguió una llamada real con un modelo Gemini gratuito, esta fase no se hace y sus horas pasan al margen. | 16 | 1,5 | Tres ráfagas reales, con 1 minuto de espera entre una y otra, cumplen el **criterio de coincidencia** (archivo 9). Si no se consigue en 1,5 h, se anota en «Limitaciones conocidas» del README y la ráfaga de la entrevista se hace sin API. |
 | 7. Cierre | README, despliegue final, recorrido de los CUJ en la URL pública y ensayo. | 36 | 2 | En la URL pública funcionan los CUJ de la tabla «CUJ por modo» marcados para la URL pública. |
 | Margen | Imprevistos y, si sobra, las mejoras opcionales de Goals, en su orden. | — | 2,5 | |
 | **Total** | | | **24** | |
 
 ### Fase 0 en detalle
 
-**Objetivo:** comprobar el primer día, sin gastar dinero, que el despliegue con SSR funciona y que AI Gateway responde con el esquema real.
+**Objetivo:** comprobar el primer día, sin gastar dinero, que el despliegue con SSR funciona y que la llamada a la IA funciona con el esquema real.
+
+> **Resultado y cambio de proveedor.** Esta subsección describe la fase 0 tal como se planificó con AI Gateway. El despliegue, el SSR, las variables y `maxDuration` se comprobaron (ver el registro). La llamada real falló con un 403 del Gateway. Los puntos que dependían del Gateway (saldo, modelos elegibles, OIDC y respuesta del modelo) **pasan a la fase 2 con la Gemini Developer API**. Ver «Desviación del enunciado».
 
 Pasos:
 1. **Plantilla:**
@@ -655,7 +677,7 @@ Pasos:
 - En Vercel están configuradas `TRIAGE_MODEL` y `DEMO_PASSWORD`. La autenticación con el Gateway es por OIDC, sin `AI_GATEWAY_API_KEY` en Vercel.
 - El panel de Vercel muestra una duración máxima de 30 s para la función.
 - Desde la URL pública, el botón temporal recibe una respuesta que pasa `AiDecisionSchema`, y la respuesta no llega truncada con el límite de 800 tokens.
-- Están anotados el ID del modelo, la respuesta, los tokens y el coste de la llamada.
+- Están anotados el ID del modelo, la respuesta, los tokens y el coste de la llamada. *(No cumplido con el Gateway; se comprueba en la fase 2.)*
 
 **Si no hay ningún modelo adecuado que funcione sin coste:**
 - se anota el resultado en el registro y en las limitaciones del README;
@@ -673,6 +695,11 @@ Los nombres concretos de funciones y opciones que dependen de la versión no se 
   - `createServerFn({ method: 'POST' })`;
   - la entrada se valida con `safeParse` dentro de la función, sin validador de Zod en la propia Server Function;
   - nunca lanza excepciones al cliente: siempre devuelve un `TriageResult`.
+- **Proveedor:**
+  - Gemini Developer API con `@ai-sdk/google`, versión compatible con `ai` 7.0.176 (se anota en el registro);
+  - clave en `GOOGLE_GENERATIVE_AI_API_KEY`, solo en el servidor;
+  - el modelo se crea con el proveedor de Google en `src/server/llm-client.ts`, que sigue siendo el único archivo que importa el AI SDK;
+  - ni facturación de Google Cloud ni planes ni pagos.
 - **Llamada al modelo:**
   - la función de salida estructurada de la versión de `ai` instalada, con `AiDecisionSchema` como esquema;
   - temperatura 0;
@@ -707,15 +734,15 @@ Los nombres concretos de funciones y opciones que dependen de la versión no se 
 | Comprobadores de error (timeout, 429, salida que no cumple el esquema) | `error.name` `TimeoutError` o `AbortError`; `APICallError.isInstance(e) && e.statusCode === 429`; `NoObjectGeneratedError.isInstance(e)`. Todos se importan de `ai`. |
 | Dónde se configura `maxDuration` y valor que muestra Vercel | `vite.config.ts`: `nitro({ vercel: { functions: { maxDuration: 30 } } })`. Comprobado en el despliegue: la función `__server` tiene `timeout: 30`, runtime `nodejs24.x`, 2048 MB. No hace falta `vercel.json` para esto (el de la plantilla solo declara `framework`). |
 | Carpeta de salida del bundle del cliente | `.output/public` en el build local (preset de Node); en Vercel el build lo hace la plataforma. La verificación 3 se hace sobre `.output/public`. |
-| Saldo gratuito y modelos elegibles | Saldo informado por `gateway.getCredits()`: 0 (total usado 0). Hay 5 modelos de lenguaje con precio 0: `nvidia/nemotron-3.5-lightning-free`, `reflection/beam`, `humansand/ampersand-v0.1`, `stealth/glyph-cluster` y `recursive/flint-v1.0`. **Los 5 devuelven 403: AI Gateway exige una tarjeta de crédito registrada para desbloquear los créditos gratuitos.** No se ha añadido ninguna tarjeta. |
-| `TRIAGE_MODEL` elegido y opción de razonamiento usada | **Ninguno verificado.** Valor provisional en Vercel y en `.env.local`: `nvidia/nemotron-3.5-lightning-free` (sin confirmar que admita salida estructurada). Razonamiento: `reasoning: 'none'`. |
+| Saldo gratuito y modelos elegibles (AI Gateway) | Saldo informado por `gateway.getCredits()`: 0 (total usado 0). Hay 5 modelos de lenguaje con precio 0: `nvidia/nemotron-3.5-lightning-free`, `reflection/beam`, `humansand/ampersand-v0.1`, `stealth/glyph-cluster` y `recursive/flint-v1.0`. **Los 5 devuelven 403: AI Gateway exige una tarjeta de crédito registrada para desbloquear los créditos gratuitos.** No se ha añadido ninguna tarjeta. |
+| `TRIAGE_MODEL` elegido y opción de razonamiento usada | **Ninguno verificado.** El valor provisional de Vercel y de `.env.local` (`nvidia/nemotron-3.5-lightning-free`, un ID de AI Gateway) deja de servir. Se fija un modelo Gemini en la fase 2 tras comprobar disponibilidad y cuota. |
 | Respuesta, tokens y coste de la llamada con S1 | Sin respuesta del modelo: 403 del Gateway por falta de tarjeta. Coste 0 €. Desde la URL pública, `triageReport` devuelve `unauthorized` con una contraseña incorrecta (tras 1 s) y `server` con la correcta. |
 
 ### Estructura
 
 | Carpeta | Responsabilidad |
 |---|---|
-| `src/domain/` | Tipos y reglas puras. No importa nada de fuera. |
+| `src/domain/` | Tipos y reglas puras, sin React ni AI SDK. Solo importa constantes de `src/data/`. |
 | `src/data/` | Datos maestros, guion y respuestas pregrabadas. |
 | `src/ai/` | Contrato con la IA (esquema, alias, saneado) y prompt. |
 | `src/server/` | Server Function y llamada al modelo. |
@@ -733,11 +760,11 @@ Los nombres concretos de funciones y opciones que dependen de la versión no se 
    - **`tsconfig.json`:** `strict: true` y alias `@/*` → `src/*`, el que usa shadcn.
    - **`vite.config.ts`:** el despliegue en Vercel con Nitro y `maxDuration` se configuran como indique la guía oficial; si la guía exige otro archivo, se anota en el registro de la fase 0.
 2. **`components.json`** (Create con `npx shadcn init`, con el alias `@/*`).
-3. **`.env.example`** (Create): `AI_GATEWAY_API_KEY` (solo en local; en Vercel, OIDC), `TRIAGE_MODEL` (ID fijado en la fase 0) y `DEMO_PASSWORD` (12 caracteres o más).
+3. **`.env.example`** (Create): `GOOGLE_GENERATIVE_AI_API_KEY` (solo en el servidor; en Vercel, como variable sensible), `TRIAGE_MODEL` (ID del modelo Gemini fijado en la fase 2) y `DEMO_PASSWORD` (12 caracteres o más). La fase 0 lo creó con `AI_GATEWAY_API_KEY`; se actualiza en la fase 2.
 4. **`.gitignore`** (Modify, ya existe): se añaden `.env*` y `!.env.example`; se conserva el resto, que ya ignora `node_modules/`, `.output/`, `.vercel/` y `dist/`.
 37. **`src/lib/utils.ts`** (Create con `npx shadcn init`): `cn`, que usan los componentes de shadcn.
 38. **`src/routeTree.gen.ts`** (generado por el router de TanStack Start; se versiona para que `npm run typecheck` funcione en un clon limpio).
-39. **`vitest.config.ts`** (Create **solo si** Vitest falla al cargar el plugin de Start desde `vite.config.ts`): sin plugins, entorno `node` y alias `@`.
+39. **`vitest.config.ts`** (Create; hizo falta, porque Vitest falla al salir si carga el plugin de Start desde `vite.config.ts`): sin plugins, entorno `node` y alias `@`.
 
 #### Datos
 
@@ -901,11 +928,11 @@ Los nombres concretos de funciones y opciones que dependen de la versión no se 
     | 8 | sí | no | sí |
     | 9 | no (sin contraseña) | sí | sí |
 
-    Si la fase 0 no encontró un modelo sin coste, solo se recorren los CUJ de la columna «Modo sin API» y el CUJ 9, porque la contraseña se comprueba antes de llamar al modelo. Los demás quedan como limitación documentada (R2).
+    Si no hay un modelo Gemini gratuito disponible, solo se recorren los CUJ de la columna «Modo sin API» y el CUJ 9, porque la contraseña se comprueba antes de llamar al modelo. Los demás quedan como limitación documentada (R2).
 *   **Manual:**
     1. En la URL pública, recorrer los CUJ de la tabla anterior, cada uno en su modo.
-    2. Antes de la entrevista, tres ráfagas reales con 1 minuto de espera entre ellas, que cumplan el criterio de coincidencia del archivo 9. Se repite la mañana de la entrevista. Solo se hace si hay un modelo sin coste.
-    3. Buscar en la carpeta de salida del bundle del cliente, anotada en el registro de la fase 0, que no aparezcan los valores de `DEMO_PASSWORD` ni de `AI_GATEWAY_API_KEY`.
+    2. Antes de la entrevista, tres ráfagas reales con 1 minuto de espera entre ellas, que cumplan el criterio de coincidencia del archivo 9. Se repite la mañana de la entrevista. Solo se hace si hay un modelo Gemini gratuito disponible.
+    3. Buscar en la carpeta de salida del bundle del cliente, anotada en el registro de la fase 0, que no aparezcan los valores de `DEMO_PASSWORD` ni de `GOOGLE_GENERATIVE_AI_API_KEY`.
     4. Comprobar en la consola del navegador que no hay advertencias de hidratación (hydration mismatch).
 
 --------------------------------------------------------------------------------

@@ -11,7 +11,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "start": "node .output/server/index.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@tailwindcss/vite": "4.3.5",
@@ -33,7 +34,8 @@
     "@types/react-dom": "19.3.0",
     "@vitejs/plugin-react": "6.3.0",
     "typescript": "6.0.3",
-    "vite": "8.3.8"
+    "vite": "8.3.8",
+    "vitest": "5.1.1"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
