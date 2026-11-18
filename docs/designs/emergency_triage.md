@@ -1,7 +1,7 @@
 # EmergencyTriage
 
 *   **Author:** JackElSimple
-*   **Status:** In Review
+*   **Status:** Approved (diseño cerrado; la fase 0 está pendiente de autorización)
 *   **Date:** 2026-11-18
 
 --------------------------------------------------------------------------------
@@ -71,12 +71,12 @@ La IA no decide, solo propone. El código garantiza que **ninguna referencia inv
 
 ### Funcionalidades esenciales del MVP
 
-1. **Recorrido de la ráfaga.** «Simular ráfaga» encola 9 avisos del guion, que se procesan de uno en uno y terminan en las agrupaciones de la tabla «Guion de la ráfaga». Antes de la entrevista se comprueba a mano con la IA real y con el modo sin API. No es una evaluación estadística del modelo.
+1. **Recorrido de la ráfaga.** «Simular ráfaga» encola 9 avisos del guion, que se procesan de uno en uno y terminan en las agrupaciones de la tabla «Guion de la ráfaga». Antes de la entrevista se comprueba a mano con el modo sin API y, si la fase 0 encontró un modelo sin coste, con la IA real. No es una evaluación estadística del modelo.
 2. **Ninguna referencia inventada llega al estado.** Los alias que la IA no recibió se descartan o producen un error; un incidente no elegible nunca recibe el aviso.
 3. **La persona tiene la última palabra.** Un campo editado a mano queda bloqueado frente a la IA; la IA nunca baja la gravedad de un incidente; solo una persona valida o descarta.
 4. **Modo sin API determinista.** Seleccionable con el tablero vacío; reproduce la ráfaga con 9 respuestas pregrabadas y siempre da el mismo resultado.
 5. **Errores visibles y recuperables a mano.** Un error de la IA deja el aviso marcado con su tipo y un botón «Reintentar»; la cola sigue con el siguiente.
-6. **Coste 0 € y claves protegidas.** El crédito gratuito de AI Gateway (pendiente de verificar el día 1) y Vercel Hobby. La clave del Gateway solo existe en el servidor; las llamadas a la IA exigen una contraseña de demo.
+6. **Coste 0 € y claves protegidas.** El saldo gratuito de AI Gateway (se comprueba en la fase 0; no se compran créditos, no se contrata ningún plan y no se usa BYOK) y Vercel Hobby. La clave del Gateway solo existe en el servidor; las llamadas a la IA exigen una contraseña de demo.
 7. **Arquitectura explicable.** Reglas de negocio en funciones de TypeScript puro con tests; el motor de IA y el modo sin API implementan la misma interfaz; README con diagramas.
 
 ### Guion de la ráfaga: agrupaciones esperadas
@@ -192,7 +192,8 @@ Ninguna que bloquee el MVP. La pregunta de producción (dónde serializar el pro
 *   **Then**:
     *   antes de la primera llamada se abre el diálogo de contraseña y los avisos siguen «En cola»;
     *   si el servidor la rechaza, el aviso vuelve a la cola en su misma posición, la cola se detiene y el diálogo se abre con «Contraseña incorrecta»;
-    *   con la contraseña correcta, la cola continúa sin haber perdido ningún aviso.
+    *   con la contraseña correcta, la cola continúa sin haber perdido ningún aviso;
+    *   el diálogo no se puede cerrar sin introducir una contraseña. Para salir sin introducirla se recarga la página, que equivale a reiniciar la demo porque el estado solo está en memoria.
 
 ## Technical Plan (Architecture)
 
@@ -248,7 +249,7 @@ TriageErrorKind = ReportErrorKind | "unauthorized"   // unauthorized nunca se gu
 
 Report {
   id: string
-  seq: number                   // orden estable: cola, feed y lista de avisos
+  seq: number                   // orden de cola, feed y lista de avisos; «Reintentar» asigna uno nuevo (al final)
   buildingId: string
   floor: number
   text: string                  // 1..500 caracteres
@@ -356,21 +357,32 @@ El texto de los avisos va entre delimitadores y se declara como dato, no como in
 
 ### 5. Server Function `triageReport`
 
-Creada con `createServerFn`; `maxDuration` de 30 s; sin estado salvo el contador del límite. Pasos:
+Creada con `createServerFn({ method: 'POST' })`. Con GET, el método por defecto, el contexto y la contraseña viajarían en la URL. Tiene un `maxDuration` de 30 s, configurado como indica la guía oficial (ver «Decisiones de API fijadas»), y no guarda estado salvo el contador del límite. Pasos:
 
 1. **Límite de peticiones:** contador en memoria por instancia, 20 por minuto, contando también los intentos con contraseña incorrecta. Si se supera, `rate_limit`.
-2. **Contraseña:** comparación en tiempo constante con `DEMO_PASSWORD`. Si la variable falta o tiene menos de 12 caracteres, `server` (error de configuración, no de contraseña). Si no coincide, espera 1 s y devuelve `unauthorized`.
-3. **Validación de entrada** con Zod (textos, edificio y planta existentes, todos los incidentes del mismo edificio, límites de tamaño). Si falla, `invalid_input`.
+2. **Contraseña:** se calcula el SHA-256 de la entrada y el de `DEMO_PASSWORD`, y los dos resultados se comparan con `timingSafeEqual` de `node:crypto`. Como siempre miden 32 bytes, la comparación nunca lanza una excepción. Si la variable falta o tiene menos de 12 caracteres, `server` (error de configuración, no de contraseña). Si no coincide, espera 1 s y devuelve `unauthorized`.
+3. **Validación de entrada** con `safeParse` de Zod dentro de la función (textos, edificio y planta existentes, todos los incidentes del mismo edificio, límites de tamaño). Si falla, `invalid_input`. No se usa un validador de Zod en la propia Server Function, porque una entrada no válida lanzaría una excepción en lugar de devolver `invalid_input`.
 4. **Elegibilidad y alias:** calcula `canJoin`/`canRelate` y asigna alias.
-5. **Llamada a la IA:** `TRIAGE_MODEL` con versión exacta, temperatura 0, 800 tokens de salida como máximo, razonamiento extendido desactivado o al mínimo, timeout de 15 s.
-6. **Validación de la salida** con Zod y las reglas entre campos. Si falla, `invalid_output`.
+5. **Llamada a la IA:**
+   - `TRIAGE_MODEL`, con el ID fijado en la fase 0;
+   - temperatura 0 y como máximo 800 tokens de salida;
+   - `maxRetries: 0`, sin reintentos del SDK;
+   - `abortSignal: AbortSignal.timeout(15_000)`;
+   - razonamiento extendido según «Decisiones de API fijadas».
+6. **Validación de la salida** con Zod y las reglas entre campos. Si falla, `invalid_output`. El esquema que recibe el SDK no limita la longitud de los textos; esos límites los aplica el recorte del paso 7.
 7. **Traducción y saneado de referencias:**
    - `targetRef` desconocido → `targetIncidentId: null` (`applyDecision` lo convertirá en «crear»);
    - `relatedRef` desconocido → `null`;
    - `categoryRef` o `protocolRef` desconocidos → `invalid_ref`;
    - `newCategoryName` que, normalizado (minúsculas, sin tildes, espacios simples), coincide con una categoría existente → esa categoría;
    - textos recortados a su máximo.
-8. **Errores:** 429 → `rate_limit`; timeout → `timeout`; cualquier otro → `server`. Nunca lanza excepciones al cliente.
+8. **Errores**, comprobados en este orden:
+   1. un aborto o un timeout da `timeout`;
+   2. un error de la API con estado 429 da `rate_limit`;
+   3. un error del SDK porque la salida no cumple el esquema da `invalid_output`;
+   4. cualquier otro error da `server`.
+
+   La función nunca lanza excepciones al cliente.
 9. **Log:** una línea por llamada con `{ model, promptVersion, latencyMs, tokens, outcome }`.
 
 ```text
@@ -411,7 +423,7 @@ TriageInput { report, contextIncidents: { incident, reports[] }[], categories }
 5. **Categoría nueva:** si el nombre normalizado ya existe, se reutiliza; si no, se crea no oficial y se devuelve como `createdCategory`.
 6. El aviso pasa a `done`.
 
-**Acciones del operador** (solo sobre incidentes `pending`): `editIncident` (cada campo editado queda bloqueado; la categoría se elige entre `visibleCategories`), `validateIncident` y `discardIncident`. **Sobre el catálogo:** `approveCategory`, visible en cualquier columna. **Sobre avisos:** `enqueueReports`, `markProcessing`, `markError`, `retryReport` (vuelve a la cola con un `seq` nuevo, al final) y `returnToQueue` (vuelve a la cola conservando su `seq`). **Reinicio:** `createInitialState()`.
+**Acciones del operador** (solo sobre incidentes `pending`): `editIncident` (cada campo editado queda bloqueado; la categoría se elige entre `visibleCategories`), `validateIncident` y `discardIncident`. **Sobre el catálogo:** `approveCategory`, visible en cualquier columna. **Sobre avisos:** `enqueueReports`, `markProcessing`, `markError`, `retryReport` (vuelve a la cola con un `seq` nuevo, al final) y `returnToQueue` (vuelve a la cola conservando su `seq`). **Reinicio:** `createInitialState(mode)`. Conserva el modo actual. El store conserva además `demoPassword` y pone `passwordPrompt ← null`.
 
 ```mermaid
 stateDiagram-v2
@@ -437,16 +449,19 @@ drain():
       si s.mode = "llm" y no hay demoPassword:
           passwordPrompt ← { rejected: false };  salir del bucle
       markProcessing(report)
-      result ← motor(s.mode).propose(buildTriageInput(getState(), report.id))
-      si result.ok:
-          { state, createdCategory } ← applyDecision(getState(), { reportId: report.id,
-              decision: result.decision, newIncidentId: uuid(), newCategoryId: uuid() })
-          setState(state)
-      si no, si result.error = "unauthorized":
-          returnToQueue(report);  demoPassword ← null
-          passwordPrompt ← { rejected: true };  salir del bucle
-      si no:
-          markError(report, result.error)        // la cola sigue
+      try:
+          result ← motor(s.mode).propose(buildTriageInput(getState(), report.id))
+          si result.ok:
+              { state, createdCategory } ← applyDecision(getState(), { reportId: report.id,
+                  decision: result.decision, newIncidentId: uuid(), newCategoryId: uuid() })
+              setState(state)
+          si no, si result.error = "unauthorized":
+              returnToQueue(report);  demoPassword ← null
+              passwordPrompt ← { rejected: true };  salir del bucle
+          si no:
+              markError(report, result.error)    // la cola sigue
+      catch:
+          markError(report, "server")            // un fallo del cliente no deja el aviso en «Procesando»
       si report.scriptKey: esperar 300 ms
   finally:
     running ← false
@@ -455,6 +470,7 @@ drain():
 - Un aviso encolado mientras `running` está activo lo recoge el bucle en curso: entre la última comprobación y el `finally` no hay ningún `await`.
 - **Mientras `running` es verdadero**, la interfaz desactiva «Reiniciar», el interruptor de modo, «Simular ráfaga», «Editar», «Validar», «Descartar» y «Aprobar categoría». Siguen activos «Enviar aviso» y «Reintentar», que solo añaden avisos a la cola. Así el tablero no cambia por acciones del operador durante una llamada.
 - Al introducir la contraseña: se guarda, `passwordPrompt ← null` y `drain()`.
+- El diálogo de contraseña no se puede cerrar sin introducirla (ver CUJ 9).
 
 ### 9. Interfaz
 
@@ -549,7 +565,7 @@ Una ruta (`/`), componentes de shadcn/ui:
 
 *   **Pros**: usaría la cuota gratuita de Google.
 *   **Cons**: BYOK en AI Gateway requiere el plan de pago.
-*   **Reason for Rejection**: Rejected by author: se usa el crédito gratuito del Gateway (pendiente de verificar el día 1); si no existe, BYOK vuelve a considerarse.
+*   **Reason for Rejection**: Rejected by author: el objetivo de coste es 0 € y BYOK exige pagar. Se usa el saldo gratuito del Gateway con un modelo elegible. Si no hay ninguno que funcione sin coste, la demo usa el modo sin API (R2).
 
 #### Alternative M: SPA sin SSR
 
@@ -563,13 +579,13 @@ Una ruta (`/`), componentes de shadcn/ui:
 
 | # | Riesgo | Mitigación | Limitación aceptada |
 |---|---|---|---|
-| R1 | El modelo se desvía del guion en directo (por ejemplo, agrupa S8 con A). | Prompt con ejemplo negativo; modelo con versión fijada; la ráfaga se prueba varias veces antes de la entrevista; el modo sin API reproduce el guion. | Con la IA real no hay garantía de resultado. Si diverge, se usa para enseñar por qué una persona valida. |
-| R2 | El crédito gratuito del Gateway no existe o se agota. | Comprobarlo el día 1; el modo sin API sirve para toda la demo. | Sin crédito, la IA real solo se enseña si hay presupuesto. |
-| R3 | Errores de la IA en mitad de la ráfaga (429, timeout). | Error visible por aviso y «Reintentar». | Varios avisos pueden quedar en error; reintentarlos cambia el orden y el resultado puede no coincidir con el guion. |
+| R1 | El modelo se desvía del guion en directo (por ejemplo, agrupa S8 con A). | Prompt con ejemplo negativo; ID de modelo fijado en la fase 0; la ráfaga se prueba varias veces antes de la entrevista; el modo sin API reproduce el guion. | Con la IA real no hay garantía de resultado. Si diverge, se usa para enseñar por qué una persona valida. |
+| R2 | No hay saldo gratuito, ningún modelo elegible admite la salida estructurada, o el saldo se agota. | La fase 0 comprueba el saldo y los modelos elegibles y registra el resultado. Sin pagos ni BYOK. Si no hay modelo sin coste, la demo usa el modo sin API. | El modo sin API cubre la ráfaga pregrabada, la gestión de incidentes (editar, validar, descartar), la aprobación de categorías y el reinicio. **No cubre** los avisos manuales ni el análisis con IA. |
+| R3 | Errores de la IA en mitad de la ráfaga (429, timeout). | Error visible por aviso y «Reintentar». Se espera 1 minuto entre ráfagas reales seguidas para no superar el límite de 20 peticiones por minuto. | Varios avisos pueden quedar en error; reintentarlos cambia el orden y el resultado puede no coincidir con el guion. |
 | R4 | Una agrupación errónea no se puede deshacer. | «Ante la duda, separar»; el motivo de cada propuesta es visible. | Corregirla exige descartar el incidente. |
 | R5 | El texto libre de la IA inventa ubicaciones o instrucciones. | Prohibido en el prompt; etiqueta «Texto generado por IA»; el bloque de protocolo sale de los datos maestros. | El texto libre no se verifica. |
 | R6 | Abuso de la URL pública. | Contraseña de al menos 12 caracteres; límite de peticiones antes de la contraseña; 1 s de espera tras un fallo; límites de tamaño y tokens; se cambia la contraseña tras la entrevista. | El límite es por instancia y global: alguien con la URL puede agotar las 20 peticiones por minuto. |
-| R7 | APIs de TanStack Start o AI SDK distintas de lo previsto. | La fase 0 despliega la plantilla oficial con una llamada real; versiones fijadas en `package-lock.json`; un único archivo usa AI SDK. | — |
+| R7 | APIs de TanStack Start o AI SDK distintas de lo previsto. | La fase 0 despliega la plantilla oficial con una llamada real y anota las APIs reales en «Decisiones de API fijadas»; versiones exactas en `package.json`; un único archivo usa AI SDK. | — |
 | R8 | Las 24 h no alcanzan. | Margen de 2,5 h; las mejoras opcionales solo entran con margen; orden de recorte: pulido visual, luego script de comprobación. | — |
 
 **Limitaciones conocidas** (documentadas en el README, sin código para evitarlas):
@@ -578,6 +594,9 @@ Una ruta (`/`), componentes de shadcn/ui:
 - Si un `join` apunta a un incidente no válido, el incidente nuevo usa la gravedad propuesta, que la IA pensó para el incidente consolidado.
 - Un contexto por encima de los límites (30 incidentes, 150 avisos o 128 KB) devuelve `invalid_input` y no se puede reintentar. La demo está muy por debajo.
 - Una sola sesión y un solo navegador.
+- Sin un modelo elegible sin coste, la demo no enseña los avisos manuales ni el análisis con IA (R2).
+- Entre dos ráfagas reales seguidas hay que esperar 1 minuto por el límite de peticiones.
+- Para cerrar el diálogo de contraseña sin introducirla hay que recargar la página.
 
 ## Non-Functional Requirements
 
@@ -598,18 +617,99 @@ Una ruta (`/`), componentes de shadcn/ui:
 
 ### Fases y presupuesto (24 h)
 
-| Fase | Contenido | Horas | Condición de salida |
-|---|---|---|---|
-| 0. Esqueleto | Plantilla oficial de TanStack Start desplegada en Vercel; `triageReport` hace una llamada real con salida estructurada a `google/gemini-2.5-flash` u `openai/gpt-4o-mini`; versiones fijadas. | 2 | La URL pública devuelve una decisión válida con al menos un modelo. Se fija ese en `TRIAGE_MODEL`. Si ninguno funciona, la demo se hace en modo sin API (R2). |
-| 1. Dominio | Tipos, reglas, `applyDecision`, acciones, selectores y sus tests. | 4 | `npm test` en verde. |
-| 2. IA y servidor | Contrato, alias, saneado, prompt, Server Function y tests del saneado. | 3 | Tests en verde y una llamada real correcta. |
-| 3. Store y cola | Store en memoria, cola y sus tests. | 1,5 | Tests de la cola en verde. |
-| 4. Modo sin API | Guion, respuestas pregrabadas, `FallbackEngine` y su test. | 1,5 | El test de la ráfaga sin API en verde. |
-| 5. Interfaz | Panel, feed, tablero, tarjetas y diálogos. | 6 | Los CUJ 1 a 9 funcionan en local. |
-| 6. Ajuste del prompt | Ráfaga real en la interfaz, repetida hasta que las agrupaciones coinciden con el guion. | 1,5 | Tres ráfagas seguidas con las agrupaciones, relaciones y categorías del guion. Si no se consigue en este tiempo, se documenta y la ráfaga de la entrevista se hace sin API. |
-| 7. Cierre | README, despliegue final, recorrido de los CUJ en la URL pública y ensayo. | 2 | CUJ 1 a 9 en la URL pública. |
-| Margen | Imprevistos y, si sobra, mejoras opcionales en su orden. | 2,5 | |
-| **Total** | | **24** | |
+| Fase | Contenido | Archivos | Horas | Condición de salida |
+|---|---|---|---|---|
+| 0. Esqueleto | Ver «Fase 0 en detalle». | 1 a 4, 37, 38 y 39 (si hace falta); versiones provisionales de 15 (solo `AiDecisionSchema`), 17, 18 (solo pasos 1, 2 y 5) y 24 (botón temporal) | 2,25 | Ver «Fase 0 en detalle». |
+| 1. Dominio | Datos maestros, tipos, reglas, `applyDecision`, acciones y selectores. | 5 a 7 y 10 a 14; tests 31 y 32 | 4 | Tests 31 y 32 en verde. |
+| 2. IA y servidor | Guion y rúbrica, contrato, alias, saneado, prompt y Server Function completa (pasos 1 a 9). | 9 y 15 a 18; test 33 | 2,75 | Test 33 en verde. Si la fase 0 encontró un modelo sin coste, el botón temporal recibe una decisión traducida a IDs reales tras los pasos 1 a 9. |
+| 3. Store y cola | Motor de IA, store en memoria y cola. | 19, 21 y 22; test 35 | 1,5 | Test 35 en verde. |
+| 4. Modo sin API | Respuestas pregrabadas y `FallbackEngine`. | 8 y 20; test 34 | 1,5 | Test 34 en verde. |
+| 5. Interfaz | Panel, feed, tablero, tarjetas y diálogos. Se quita el botón temporal. | 23 a 30 | 6 | En local funcionan los CUJ de la tabla «CUJ por modo», cada uno en su modo. |
+| 6. Ajuste del prompt | Ráfagas reales en la interfaz. Solo se modifica `src/ai/prompt.ts` (16), y cada cambio sube `PROMPT_VERSION`. Los archivos 8 y 9 no cambian. Si la fase 0 no encontró un modelo sin coste, esta fase no se hace y sus horas pasan al margen. | 16 | 1,5 | Tres ráfagas reales, con 1 minuto de espera entre una y otra, cumplen el **criterio de coincidencia** (archivo 9). Si no se consigue en 1,5 h, se anota en «Limitaciones conocidas» del README y la ráfaga de la entrevista se hace sin API. |
+| 7. Cierre | README, despliegue final, recorrido de los CUJ en la URL pública y ensayo. | 36 | 2 | En la URL pública funcionan los CUJ de la tabla «CUJ por modo» marcados para la URL pública. |
+| Margen | Imprevistos y, si sobra, las mejoras opcionales de Goals, en su orden. | — | 2,5 | |
+| **Total** | | | **24** | |
+
+### Fase 0 en detalle
+
+**Objetivo:** comprobar el primer día, sin gastar dinero, que el despliegue con SSR funciona y que AI Gateway responde con el esquema real.
+
+Pasos:
+1. **Plantilla:**
+   - se genera la plantilla oficial de TanStack Start en una carpeta temporal y se copia al repositorio, conservando `.gitignore` y `README.md` (archivos 4 y 36, que se modifican, no se crean);
+   - se fijan versiones exactas;
+   - se configura el alias `@/*` y se ejecuta `shadcn init`.
+2. **Despliegue en Vercel:**
+   - se sigue la guía oficial vigente de TanStack Start para Vercel con Nitro;
+   - se configura `maxDuration` de 30 s donde indique la guía.
+3. **Saldo y modelos (coste 0 €):**
+   - en el panel de AI Gateway se comprueba el saldo gratuito disponible y qué modelos son elegibles para ese nivel;
+   - se elige un modelo elegible que admita la salida estructurada prevista, a ser posible sin razonamiento extendido por defecto.
+4. **Llamada temporal:**
+   - se adelantan a esta fase `AiDecisionSchema` (archivo 15) y los pasos 1 (límite), 2 (contraseña) y 5 (llamada) de `triageReport` (archivo 18), para que la URL pública no gaste saldo sin contraseña;
+   - un botón temporal en `src/routes/index.tsx` llama a `triageReport` con el aviso S1 y la contraseña.
+5. **Registro:** se completa la tabla «Registro de la fase 0» de la subsección siguiente.
+
+**Condición de salida** (deben cumplirse todos los puntos):
+- `curl <URL pública>` devuelve HTML con el contenido de la página ya pintado, no un contenedor vacío.
+- En Vercel están configuradas `TRIAGE_MODEL` y `DEMO_PASSWORD`. La autenticación con el Gateway es por OIDC, sin `AI_GATEWAY_API_KEY` en Vercel.
+- El panel de Vercel muestra una duración máxima de 30 s para la función.
+- Desde la URL pública, el botón temporal recibe una respuesta que pasa `AiDecisionSchema`, y la respuesta no llega truncada con el límite de 800 tokens.
+- Están anotados el ID del modelo, la respuesta, los tokens y el coste de la llamada.
+
+**Si no hay ningún modelo adecuado que funcione sin coste:**
+- se anota el resultado en el registro y en las limitaciones del README;
+- la demo usa el modo sin API, que cubre lo que dice R2: la ráfaga y la gestión de incidentes, pero no los avisos manuales ni el análisis con IA;
+- no se hacen pagos, no se contrata ningún plan y no se cambia a BYOK;
+- las fases 2 a 5 siguen igual, porque el código de IA se escribe y se prueba con tests, y la fase 6 no se hace.
+
+### Decisiones de API fijadas
+
+Estas decisiones son obligatorias.
+
+Los nombres concretos de funciones y opciones que dependen de la versión no se inventan. Se toman de la documentación de la versión instalada en la fase 0 y se anotan en la tabla de registro. Si la fase 0 descubre una API distinta, se anota en esa tabla y prevalece sobre esta lista.
+
+- **Server Function:**
+  - `createServerFn({ method: 'POST' })`;
+  - la entrada se valida con `safeParse` dentro de la función, sin validador de Zod en la propia Server Function;
+  - nunca lanza excepciones al cliente: siempre devuelve un `TriageResult`.
+- **Llamada al modelo:**
+  - la función de salida estructurada de la versión de `ai` instalada, con `AiDecisionSchema` como esquema;
+  - temperatura 0;
+  - límite de 800 tokens de salida, con el nombre de opción de esa versión;
+  - `maxRetries: 0`;
+  - `abortSignal: AbortSignal.timeout(15_000)`.
+- **Esquema que recibe el SDK:** sin límites de longitud en los textos; el recorte lo hace el paso 7.
+- **Clasificación de errores** (en este orden):
+  1. aborto o timeout → `timeout`;
+  2. error de la API con estado 429 → `rate_limit`;
+  3. error del SDK porque la salida no cumple el esquema → `invalid_output`;
+  4. cualquier otro → `server`.
+
+  Cada caso se reconoce con los comprobadores de tipo que exporte la versión instalada, y se anotan en la tabla de registro.
+- **Contraseña:** SHA-256 (`createHash` de `node:crypto`) de la entrada y de `DEMO_PASSWORD`, comparados con `timingSafeEqual`.
+- **Razonamiento extendido:**
+  - si el modelo elegido razona por defecto, se desactiva o se reduce al mínimo con la opción que documente su proveedor para la versión instalada;
+  - si no se puede y la respuesta llega truncada, se elige otro modelo elegible.
+- **Versiones:**
+  - exactas en `package.json`, sin `^` ni `~`;
+  - `zod` con la versión mayor que acepte la versión instalada de `ai`, importado desde `"zod"`.
+- **Despliegue:**
+  - adaptador y `maxDuration` según la guía oficial de TanStack Start para Vercel con Nitro;
+  - la duración efectiva se comprueba en el panel de Vercel.
+
+**Registro de la fase 0** (se rellena durante la fase 0):
+
+| Dato | Valor |
+|---|---|
+| Versiones de `@tanstack/react-start`, `ai` y `zod` | |
+| Función de salida estructurada y nombre de la opción de tokens | |
+| Comprobadores de error (timeout, 429, salida que no cumple el esquema) | |
+| Dónde se configura `maxDuration` y valor que muestra Vercel | |
+| Carpeta de salida del bundle del cliente | |
+| Saldo gratuito y modelos elegibles | |
+| `TRIAGE_MODEL` elegido y opción de razonamiento usada | |
+| Respuesta, tokens y coste de la llamada con S1 | |
 
 ### Estructura
 
