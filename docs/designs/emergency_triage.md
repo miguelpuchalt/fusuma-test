@@ -365,7 +365,7 @@ Reglas entre campos (si no se cumplen, `invalid_output`): `join` exige `targetRe
 2. política de agrupación;
 3. prohibición de inventar ubicaciones, rutas, instrucciones o referencias, también en el texto libre;
 4. reglas de gravedad y rúbrica ficticia de la demo;
-5. categoría nueva como último recurso, pensada para el incidente en su conjunto;
+5. categoría: solo vale si su nombre describe el tipo de suceso (la causa, no sus efectos); no se elige la más cercana por aproximación y, si ninguna describe el suceso, se propone una nueva, pensada para el incidente en su conjunto. El motivo dice qué suceso se identificó;
 6. un ejemplo resuelto de agrupación;
 7. un ejemplo negativo: dos sucesos independientes en la misma planta y con pocos minutos de diferencia no se agrupan.
 
@@ -609,7 +609,7 @@ Una ruta (`/`), componentes de shadcn/ui:
 
 **Limitaciones conocidas** (documentadas en el README, sin código para evitarlas):
 - Una recarga del navegador borra el tablero.
-- Durante el procesamiento (unos 20-40 s en una ráfaga) el operador no puede actuar sobre los incidentes.
+- Durante el procesamiento (unos 40 s en una ráfaga) el operador no puede actuar sobre los incidentes.
 - Si un `join` apunta a un incidente no válido, el incidente nuevo usa la gravedad propuesta, que la IA pensó para el incidente consolidado.
 - Un contexto por encima de los límites (30 incidentes, 150 avisos o 128 KB) devuelve `invalid_input` y no se puede reintentar. La demo está muy por debajo.
 - Una sola sesión y un solo navegador.
@@ -620,7 +620,7 @@ Una ruta (`/`), componentes de shadcn/ui:
 ## Non-Functional Requirements
 
 - **Seguridad:** `GOOGLE_GENERATIVE_AI_API_KEY` y `DEMO_PASSWORD` solo existen en el servidor (ninguna variable con prefijo `VITE_`); entrada validada con Zod; respuesta de la IA saneada; datos ficticios.
-- **Rendimiento:** una llamada por aviso; ráfaga de unos 20-40 s con la IA real (se mide en la fase 0 o en la fase 6) y unos 8 s sin API. Estimación aproximada: 20.000-25.000 tokens de entrada por ráfaga.
+- **Rendimiento:** una llamada por aviso; ráfaga de unos 40 s con la IA real (medido en la fase 2: 41,5 s con `gemini-3.5-flash-lite`; cada llamada tarda entre 1 y 8 s, frente a un timeout de 15 s) y unos 8 s sin API. Estimación aproximada: 20.000-25.000 tokens de entrada por ráfaga.
 - **Despliegue:** cada push a `main` despliega en Vercel; se vuelve atrás promoviendo el despliegue anterior.
 
 ## Future Improvements
@@ -737,8 +737,19 @@ Los nombres concretos de funciones y opciones que dependen de la versión no se 
 | Saldo gratuito y modelos elegibles (AI Gateway) | Saldo informado por `gateway.getCredits()`: 0 (total usado 0). Hay 5 modelos de lenguaje con precio 0: `nvidia/nemotron-3.5-lightning-free`, `reflection/beam`, `humansand/ampersand-v0.1`, `stealth/glyph-cluster` y `recursive/flint-v1.0`. **Los 5 devuelven 403: AI Gateway exige una tarjeta de crédito registrada para desbloquear los créditos gratuitos.** No se ha añadido ninguna tarjeta. |
 | `TRIAGE_MODEL` elegido y opción de razonamiento usada | **Ninguno verificado.** El valor provisional de Vercel y de `.env.local` (`nvidia/nemotron-3.5-lightning-free`, un ID de AI Gateway) deja de servir. Se fija un modelo Gemini en la fase 2 tras comprobar disponibilidad y cuota. |
 | Respuesta, tokens y coste de la llamada con S1 | Sin respuesta del modelo: 403 del Gateway por falta de tarjeta. Coste 0 €. Desde la URL pública, `triageReport` devuelve `unauthorized` con una contraseña incorrecta (tras 1 s) y `server` con la correcta. |
-| **Fase 2:** disponibilidad y cuota del modelo Gemini gratuito | **Pendiente.** Hace falta una clave de Google AI Studio (sin facturación) en `GOOGLE_GENERATIVE_AI_API_KEY`. Se anotan el modelo elegido, sus límites por minuto y por día, y si admite el esquema con campos `null`. |
-| **Fase 2:** respuesta, tokens y latencia de la llamada con S1 | **Pendiente**, por lo mismo. El código, el prompt y los tests están hechos; falta la llamada real. |
+| **Fase 2:** modelos disponibles para la clave (Google AI Studio, sin facturación) | Los `gemini-2.5-*` responden 404 («no longer available to new users»). `gemini-3.5-flash-lite`, `gemini-3.1-flash-lite` y `gemini-flash-lite-latest` responden. `gemini-3.5-flash`, `3.6`, `3.7`, `3.8` y `flash-latest` dieron 503 por alta demanda. |
+| **Fase 2:** `TRIAGE_MODEL` fijado | `gemini-3.5-flash-lite` (ID concreto, no el alias `-latest`). Con `reasoning: 'none'` no hubo truncamiento: 116-132 tokens de salida con un límite de 800. El esquema con campos `null` lo admite. |
+| **Fase 2:** cuota del nivel gratuito | La API de Google no devuelve los límites. En ~25 llamadas en unos minutos (una ráfaga completa incluida) no hubo ningún 429. Los límites exactos se consultan en el panel de Google AI Studio y **no están verificados aquí**. |
+| **Fase 2:** latencia y tokens | S1 en local: 4,8-8,7 s con 1234 tokens de entrada y ~120 de salida. Desde la función en Vercel: ~6 s por llamada. Una ráfaga completa (9 avisos) en local: 41,5 s. La entrada crece de 1234 a 1518 tokens por llamada. |
+| **Fase 2:** llamada desde la URL pública | S1 devuelve `create` con `fire-smoke` y `evac-plan` (IDs reales). S2, con el contexto de S1, devuelve `join` al incidente real. Una contraseña incorrecta da `unauthorized` y un texto vacío, `invalid_input`. |
+| **Fase 2:** una pasada de la ráfaga (informativa, sin ajustar el prompt) | A, B, C y D coinciden con el guion en agrupación, relación y categoría. B usa `evac-plan` (la alternativa permitida). **E no coincide:** el modelo eligió «Fallo Eléctrico» en lugar de crear «Fuga de agua». Es trabajo de la fase 6. |
+| **Fase 2:** incidencias | Un `server` aislado en `gemini-3.1-flash-lite` (sin reintento, por diseño). `vercel env rm` exige aprobación humana; el valor se cambió con `vercel env update`. |
+| **Fase 6:** ajuste del prompt (`v1` → `v2`) | Solo cambia `src/ai/prompt.ts` (la sección de categoría y un recordatorio al final del mensaje de usuario). Los archivos 8 y 9 no cambian. No hay ejemplos nuevos ni textos del guion en el prompt (lo comprueba un test). |
+| **Fase 6:** causa del fallo de S9 | Con `v1`, el modelo razonaba «problema de instalaciones» y elegía «Fallo Eléctrico» por parecido de efecto. La sección de categoría decía «solo si ninguna encaja» sin definir «encajar». |
+| **Fase 6:** resultados reales con `gemini-3.5-flash-lite` | S9 aislado: `v1` 3 de 4 correctas; `v2` 5 de 5 respuestas válidas (más un timeout). En ráfagas completas: `v1` 3 de 5 correctas; `v2` 2 de 2 con respuesta de S9 (la tercera pasada se cortó por un 429). Muestra pequeña: indica mejora, no garantiza fiabilidad. |
+| **Fase 6:** S1 a S8 con `v2` | Una ráfaga completa coincide con el guion en los cinco grupos. Una segunda, espaciada, coincide salvo S7, que falló por un error transitorio del proveedor (INC-1 queda en «Alta» sin S7). Una tercera se cortó por 429 tras S1 a S3 y S6, que coincidían. |
+| **Fase 6:** cuota | Primer indicio de límite: tras ~28 llamadas en pocos minutos, 5 avisos seguidos dieron `rate_limit`. Con 3 s entre llamadas no volvió a ocurrir, así que parece un límite por minuto. Sin verificar el valor exacto. |
+| **Fase 6:** variabilidad residual | Errores transitorios del proveedor en ~4 de ~45 llamadas (un `server` en S5, un `server` en S7 y un timeout; más el 429). No hay reintento automático, por diseño. El criterio de salida de «tres ráfagas seguidas» no se cumplió literalmente, por la cuota y por el límite de llamadas fijado. |
 
 ### Estructura
 
@@ -761,7 +772,7 @@ Los nombres concretos de funciones y opciones que dependen de la versión no se 
    - **Scripts:** `dev`, `build`, `start`, `test` (`vitest run`) y `typecheck` (`tsc --noEmit`).
    - **`tsconfig.json`:** `strict: true` y alias `@/*` → `src/*`, el que usa shadcn.
    - **`vite.config.ts`:** el despliegue en Vercel con Nitro y `maxDuration` se configuran como indique la guía oficial; si la guía exige otro archivo, se anota en el registro de la fase 0.
-2. **`components.json`** (Create con `npx shadcn init`, con el alias `@/*`).
+2. **`components.json`** (Create con `npx shadcn init`, con el alias `@/*`). En la fase 5 el asistente (shadcn 4.23.0) no aceptó flags para todas las preguntas y dejó valores de Next.js (`rsc: true`, `tailwind.config` y `app/globals.css`). Se corrigieron a mano: `rsc: false`, `tailwind.config: ""` y `css: "src/styles.css"`. Estilo `radix-nova`, color base `neutral`.
 3. **`.env.example`** (Create): `GOOGLE_GENERATIVE_AI_API_KEY` (solo en el servidor; en Vercel, como variable sensible), `TRIAGE_MODEL` (ID del modelo Gemini fijado en la fase 2) y `DEMO_PASSWORD` (12 caracteres o más). La fase 0 lo creó con `AI_GATEWAY_API_KEY`; la fase 2 lo actualizó.
 4. **`.gitignore`** (Modify, ya existe): se añaden `.env*` y `!.env.example`; se conserva el resto, que ya ignora `node_modules/`, `.output/`, `.vercel/` y `dist/`.
 37. **`src/lib/utils.ts`** (Create con `npx shadcn init`): `cn`, que usan los componentes de shadcn.
@@ -861,27 +872,32 @@ Los nombres concretos de funciones y opciones que dependen de la versión no se 
 
 #### Motores, store y cola
 
-19. **`src/engines/llm-engine.ts`** (Create): `createLlmEngine(getPassword)`.
+19. **`src/engines/llm-engine.ts`** (Create): `createLlmEngine(getPassword, call)`. La llamada al servidor (`call`, en la aplicación `triageReport`) se inyecta para poder probar el motor sin red. Envía la contraseña (cadena vacía si no hay) y el contexto; un fallo de red o una excepción es `network`.
 20. **`src/engines/fallback-engine.ts`** (Create): `createFallbackEngine(getState, sleep)`. Traduce las anclas al `incidentId` actual del aviso con esa clave. La espera de unos 600 ms usa el `sleep` inyectado, para que el test no tenga que esperar de verdad.
 21. **`src/store/triage-store.ts`** (Create):
-    - `useTriageStore`, sin persistencia, con `TriageState`, `running`, `demoPassword` y `passwordPrompt`;
-    - exporta la instancia única `triageQueue = createTriageQueue({ … })`, con `uuid = crypto.randomUUID`;
-    - exporta las acciones:
-      - `setMode`;
+    - `createTriageStore(deps)`, una fábrica con las dependencias inyectadas (`call`, `fallbackEngine`, que recibe `getState`, más `sleep`, `uuid` y `now`) para poder probar el store; la aplicación usa la instancia que exporta el archivo;
+    - `useTriageStore`, sin persistencia, con `state: TriageState`, `running`, `demoPassword` y `passwordPrompt`;
+    - `triageQueue`, la instancia única de la cola, con `uuid = crypto.randomUUID`;
+    - `triageActions`:
+      - `setMode`, solo con el tablero vacío y la cola parada;
       - `resetDemo`, que usa `createInitialState(mode)`, conserva `demoPassword` y pone `passwordPrompt ← null`;
-      - `setPassword`, que llama a `triageQueue.submitPassword`.
-22. **`src/queue/triage-queue.ts`** (Create): `createTriageQueue({ getState, setState, getEngine, sleep, uuid })` con `drain()`, `submitManualReport`, `startBurst`, `retry` y `submitPassword`, según el pseudocódigo del Technical Plan §8.
+      - `setPassword`, que llama a `triageQueue.submitPassword`;
+      - `editIncident`, `validateIncident`, `discardIncident` y `approveCategory`;
+      - `submitManualReport`, `startBurst` y `retry`, que delegan en la cola.
+    - **Guarda de `running`:** mientras la cola procesa, `setMode`, `resetDemo`, `startBurst` y las acciones sobre incidentes y categorías no hacen nada, además de desactivarse en la interfaz. `submitManualReport` y `retry` siguen activos porque solo añaden avisos a la cola.
+    - **Modo sin API:** la instancia de la aplicación usa `createFallbackEngine(getState, sleep)` (fase 4).
+22. **`src/queue/triage-queue.ts`** (Create): `createTriageQueue({ getState, setState, getEngine, sleep, uuid, now, ui })`, donde `ui` da acceso a los campos de interfaz del store (`running`, contraseña y diálogo), con `drain()`, `submitManualReport`, `startBurst`, `retry` y `submitPassword`, según el pseudocódigo del Technical Plan §8.
 
 #### Interfaz
 
 23. **`src/routes/__root.tsx`** (Create): `<html lang="es">`, estilos y metadatos.
 24. **`src/routes/index.tsx`** (Create): la página con cabecera, panel, feed y tablero; importa los datos maestros directamente. En la fase 0 contiene solo el botón temporal que llama a `triageReport`; ese botón se quita en la fase 5.
-25. **`src/router.tsx`** y **`src/styles/app.css`** (Create): los de la plantilla, más cuatro colores de gravedad.
+25. **`src/router.tsx`** y **`src/styles.css`** (Create): los de la plantilla; la hoja de estilos es `src/styles.css`, no `src/styles/app.css`. `shadcn init` añade el tema, y la fase 5 añade cuatro colores de gravedad (`--color-sev-*`).
 26. **`src/components/ControlPanel.tsx`** (Create): formulario de aviso, «Simular ráfaga», «Reiniciar demo» con confirmación, interruptor de modo y progreso, con las reglas de activación del Technical Plan §8 y §9.
 27. **`src/components/ReportFeed.tsx`** (Create): el feed con estado y «Reintentar».
 28. **`src/components/IncidentBoard.tsx`** e **`IncidentCard.tsx`** (Create): columnas y tarjetas según el Technical Plan §9.
-29. **`src/components/EditIncidentDialog.tsx`** y **`PasswordDialog.tsx`** (Create): edición (categoría de `visibleCategories`, gravedad, protocolo, resumen) y contraseña.
-30. **`src/components/ui/*`** (Create con shadcn): `button`, `card`, `badge`, `dialog`, `alert-dialog`, `select`, `textarea`, `input`, `label`, `switch`, `tooltip`.
+29. **`src/components/EditIncidentDialog.tsx`** y **`src/components/PasswordDialog.tsx`** (Create): edición (categoría de `visibleCategories`, gravedad, protocolo, resumen) y contraseña. La edición solo envía a `editIncident` los campos que cambian, de modo que solo esos quedan bloqueados. El diálogo de contraseña no se puede cerrar (ni con Escape ni con un clic fuera) y no tiene botón de cierre.
+30. **`src/components/ui/*`** (Create con shadcn): `button`, `card`, `badge`, `dialog`, `alert-dialog`, `select`, `textarea`, `input`, `label`, `switch`, `tooltip`. El `tooltip` se instaló pero no se usa: los textos de ayuda se muestran como texto bajo el control. `shadcn init` añadió además, con versión exacta, `radix-ui`, `class-variance-authority`, `lucide-react`, `tw-animate-css`, `@fontsource-variable/geist`, `shadcn` y `cn` (un sustituto de `clsx` + `tailwind-merge` que los componentes del estilo `radix-nova` importan directamente).
 
 #### Tests
 
@@ -896,7 +912,11 @@ Los nombres concretos de funciones y opciones que dependen de la versión no se 
     *   `INC-n` crece de uno en uno.
 32. **`src/domain/actions.test.ts`** (Create): `editIncident` bloquea; validar y descartar son finales; `approveCategory`; `retryReport` va al final y `returnToQueue` conserva la posición; `visibleCategories` oculta las no oficiales sin uso; las cuatro filas de la tabla de elegibilidad.
 33. **`src/ai/contract.test.ts`** (Create): reglas entre campos; traducción de alias; `targetRef` y `relatedRef` desconocidos; `categoryRef` y `protocolRef` desconocidos → `invalid_ref` (**el test que se enseña en la entrevista**); nombre de categoría equivalente; recortes.
-34. **`src/engines/fallback-engine.test.ts`** (Create): la ráfaga S1 a S9 con `FallbackEngine` y `applyDecision` sobre un estado inicial coincide exactamente con los resultados esperados (agrupación, relación, categoría, gravedad y protocolo), y dos ejecuciones dan el mismo resultado.
+34. **`src/engines/fallback-engine.test.ts`** (Create): la ráfaga S1 a S9 con `FallbackEngine` y `applyDecision` sobre un estado inicial coincide exactamente con los resultados esperados (agrupación, relación, categoría, gravedad y protocolo), y dos ejecuciones dan el mismo resultado. También comprueba:
+    *   los incidentes se numeran en el orden de la ráfaga (S1, S3, S6, S8, S9) y la gravedad de A sube S1 Media → S2 Alta → S4 Alta → S7 Crítica;
+    *   hay una respuesta por aviso del guion, con protocolos, categorías y longitudes válidos, y cada `join` apunta a un ancla anterior;
+    *   un aviso que no es del guion devuelve `server`, y un ancla sin incidente degrada a «crear»;
+    *   por la cola y el store, la ráfaga no hace llamadas a la IA ni pide contraseña, da el mismo resultado que la directa, se repite igual tras «Reiniciar» y espera 600 ms por aviso.
 35. **`src/queue/triage-queue.test.ts`** (Create, con un motor falso controlable):
     *   procesa de uno en uno y nunca hay dos `propose` en curso;
     *   un error deja el aviso en error y la cola sigue;
@@ -904,7 +924,10 @@ Los nombres concretos de funciones y opciones que dependen de la versión no se 
     *   ante `unauthorized`, el aviso vuelve a la cola en su posición y la cola se detiene;
     *   un aviso encolado durante el procesamiento se procesa en el mismo `drain()`;
     *   `retry` de un aviso en error lo vuelve a procesar después de los que ya estaban en cola;
-    *   si `propose` lanza una excepción, el aviso queda en error `server` y la cola sigue.
+    *   si `propose` lanza una excepción, el aviso queda en error `server` y la cola sigue;
+    *   `startBurst` encola los 9 avisos del guion con una pausa de 300 ms por aviso, no hace nada mientras la cola procesa y, en modo sin API, solo vale con el tablero vacío;
+    *   un aviso manual se valida (texto, edificio y planta) y no vale en modo sin API;
+    *   también cubre `createLlmEngine` y las guardas de `running` del store, en el mismo archivo.
 
 #### Documentación
 

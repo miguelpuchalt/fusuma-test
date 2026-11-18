@@ -5,7 +5,7 @@ import type { Severity, TriageInput } from '../domain/types'
 import type { Aliases, EligibilityFlags } from './contract'
 
 // Súbelo en cada cambio del prompt (también en la fase 6).
-export const PROMPT_VERSION = 'v1'
+export const PROMPT_VERSION = 'v2'
 
 // Prompt del sistema, en siete partes (Technical Plan §4).
 export function buildSystemPrompt(): string {
@@ -35,9 +35,11 @@ ${rubric}
 Si añades un aviso a un incidente, la gravedad que propongas debe ser la del incidente consolidado con la información nueva; nunca la rebajes por tener menos datos.
 
 # 5. Categoría
-- Elige una categoría de la lista con categoryRef y deja newCategoryName a null.
-- Solo si ninguna categoría encaja, pon categoryRef a null y propón en newCategoryName un nombre corto (máximo 40 caracteres) y genérico, pensado para el incidente en su conjunto y no para un detalle de este aviso.
-- Exactamente uno de los dos campos debe tener valor.
+Una categoría solo sirve si su nombre describe el tipo de suceso del aviso, es decir, qué está ocurriendo. Las categorías clasifican la causa o el tipo de suceso, no sus efectos.
+- Antes de elegir, identifica qué está ocurriendo realmente y compáralo con el nombre de cada categoría. Elige una (categoryRef) solo si ese suceso es lo que su nombre describe; en ese caso deja newCategoryName a null.
+- No elijas la categoría más cercana por aproximación. Que el suceso afecte a una instalación, a un servicio o a una zona del edificio, o que tenga consecuencias parecidas a las de una categoría, no lo convierte en un suceso de esa categoría.
+- Si ningún nombre describe el tipo de suceso, no fuerces una categoría: pon categoryRef a null y propón en newCategoryName un nombre corto (máximo 40 caracteres), genérico y habitual para ese tipo de suceso, pensado para el incidente en su conjunto y no para un detalle de este aviso.
+- Exactamente uno de los dos campos debe tener valor. En el motivo (rationale), di brevemente qué suceso identificaste.
 
 # 6. Ejemplo resuelto de agrupación
 Incidente I1 (planta 1, pendiente, "puede unirse: sí"): «Un desconocido intenta forzar la puerta del archivo».
@@ -130,5 +132,7 @@ Incidentes del edificio:
 ${incidents}
 
 Aviso nuevo (${buildingName}, ${floorLabel(report.floor)}):
-${delimited(report.text)}`
+${delimited(report.text)}
+
+Recuerda: elige una categoría solo si su nombre describe el tipo de suceso; si no, propón una nueva.`
 }

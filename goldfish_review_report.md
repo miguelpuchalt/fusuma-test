@@ -285,7 +285,7 @@ No se reincorporan persistencia, reintentos automáticos, recuperación avanzada
   - `retryReport` no reintenta `invalid_input`.
   - `src/domain/` solo importa constantes de `src/data/`; la tabla de estructura del diseño lo dice así.
 
-## Fase 2 (IA y servidor): estado
+## Fase 2 (IA y servidor): resultado
 
 **Hecho** (100 tests en verde, `typecheck` y `build` sin errores):
 - **Archivos:** 9 (`src/data/burst-script.ts`), 15 (`src/ai/contract.ts`), 16 (`src/ai/prompt.ts`), 17 (`src/server/llm-client.ts`, con `@ai-sdk/google`), 18 (`src/server/triage-report.ts`, pasos 1 a 9) y el test 33 (`src/ai/contract.test.ts`).
@@ -293,16 +293,171 @@ No se reincorporan persistencia, reintentos automáticos, recuperación avanzada
 - **Dependencia:** `@ai-sdk/google` 4.0.122, versión exacta y compatible con `ai` 7.0.176 (comparten `@ai-sdk/provider` 4.0.39).
 - **Verificado con el SDK real y un modelo simulado:** un `abortSignal` vencido llega como `TimeoutError` (→ `timeout`) y una salida que no cumple el esquema como `NoObjectGeneratedError` (→ `invalid_output`). Ya están como tests.
 
-**Pendiente, por falta de una clave de Google:**
-- la llamada real a Gemini con S1;
-- la elección del modelo según su disponibilidad y su cuota en el nivel gratuito;
-- si el esquema con campos `null` lo admite el modelo elegido;
-- configurar `GOOGLE_GENERATIVE_AI_API_KEY` y `TRIAGE_MODEL` en Vercel y desplegar.
+**Llamada real a Gemini: completada** (clave de Google AI Studio sin facturación; resultados en el registro de la fase 0 del diseño):
+- **Modelo fijado:** `gemini-3.5-flash-lite`. Los `gemini-2.5-*` ya no están disponibles para cuentas nuevas (404), y los modelos «flash» completos dieron 503 por alta demanda.
+- **Funciona:** el esquema con campos `null` lo admite, no hay truncamiento (~120 tokens de salida con un límite de 800) y la decisión pasa las reglas entre campos y el saneado.
+- **Desplegado:** `TRIAGE_MODEL` y `GOOGLE_GENERATIVE_AI_API_KEY` (sensible) en Production y Preview. Desde la URL pública, S1 crea un incidente con IDs reales y S2 se une a él. Una contraseña incorrecta da `unauthorized` y un texto vacío, `invalid_input`.
+- **Medido:** ~6 s por llamada desde Vercel; una ráfaga completa en local tarda 41,5 s. En ~25 llamadas no hubo ningún 429.
+- **No verificado:** los límites exactos del nivel gratuito, que la API de Google no devuelve. Se consultan en el panel de Google AI Studio.
+- **Informativo para la fase 6:** una pasada de la ráfaga coincide con el guion en los grupos A, B, C y D. En E el modelo eligió «Fallo Eléctrico» en lugar de crear «Fuga de agua». No se ha tocado el prompt.
 
-Hasta entonces, la condición de salida de la fase 2 se cumple en la parte del test 33 y queda sin cumplir en la llamada real. No se ha configurado ninguna variable ni se ha desplegado nada.
+Condición de salida de la fase 2: **cumplida** (test 33 en verde y llamada real desde la URL pública con un modelo Gemini gratuito).
 
 **Decisiones de implementación que el diseño dejaba abiertas:**
 - La petición del cliente es el `TriageInput` completo más la contraseña; el servidor la valida con Zod (`parseTriageRequest`, en `contract.ts` para poder testearla).
 - La contraseña se lee de la petición sin validar antes del paso 2, de modo que una contraseña incorrecta siempre da `unauthorized` aunque el resto de la entrada sea inválida.
 - `GOOGLE_GENERATIVE_AI_API_KEY` o `TRIAGE_MODEL` ausentes dan `server` (error de configuración), no `unauthorized`.
 - El test de clasificación de errores y los del prompt están dentro de `contract.test.ts`, sin crear archivos de test nuevos.
+- `vercel env rm` exige aprobación humana y `--yes` no la sustituye; el valor de `TRIAGE_MODEL` se cambió con `vercel env update`. El valor antiguo (un ID de AI Gateway) ya no existe.
+
+## Fase 3 (store y cola): resultado
+
+**Autorización:** el autor respondió «Continúa» tras el informe de la fase 2, y se interpretó como la autorización de la fase 3.
+
+**Hecho** (129 tests en verde, `typecheck` y `build` sin errores):
+- **Archivos:** 19 (`src/engines/llm-engine.ts`), 21 (`src/store/triage-store.ts`), 22 (`src/queue/triage-queue.ts`) y el test 35 (`src/queue/triage-queue.test.ts`, 29 tests).
+- **Dependencia:** `zustand` 5.1.0, versión exacta.
+- **Comprobación con mutaciones:** se quitó, una por una, la guarda de `running`, el `returnToQueue` del `unauthorized` y el `catch` del bucle. Los tests fallaron en los tres casos y el código quedó restaurado.
+
+**Cubre el test 35:** un solo `propose` en curso a la vez; un error deja el aviso en error y la cola sigue; sin contraseña se detiene antes de llamar; ante `unauthorized` el aviso vuelve a su posición y la cola se detiene, y con la contraseña correcta se reanuda sin perder avisos; un aviso encolado durante el procesamiento se procesa en el mismo `drain()`; `retry` va al final; una excepción en `propose` o en `applyDecision` deja el aviso en `server`; la ráfaga con su pausa de 300 ms; la validación de los avisos manuales.
+
+**Decisiones de implementación que el diseño dejaba abiertas:**
+- `createLlmEngine(getPassword, call)`: la llamada al servidor se inyecta para poder probar el motor sin red.
+- El store es una fábrica `createTriageStore(deps)` con una instancia por defecto. El estado del dominio va en `state`.
+- Las acciones del store no hacen nada mientras `running` es verdadero. El diseño lo atribuía solo a la interfaz; se duplica en el store para que sea comprobable. `submitManualReport` y `retry` siguen activos.
+- El modo sin API usa un motor provisional que devuelve `server`, hasta que la fase 4 lo sustituya por `FallbackEngine`.
+- En modo sin API, un aviso manual se ignora (no hay respuesta pregrabada para él), y `startBurst` solo vale con el tablero vacío.
+- **Límite conocido:** si se envía un segundo aviso con el diálogo de contraseña abierto, el mensaje «Contraseña incorrecta» se sustituye por la petición normal. En la aplicación el diálogo es modal y no se puede cerrar, así que no debería ocurrir, pero se comprueba en la fase 5.
+
+**No se ha desplegado** esta fase: no hay cambios visibles todavía, porque la interfaz es de la fase 5.
+
+## Fase 4 (modo sin API): resultado
+
+**Autorización:** el autor respondió «Continúa» tras el informe de la fase 3, y se interpretó como la autorización de la fase 4.
+
+**Hecho** (144 tests en verde, `typecheck` y `build` sin errores):
+- **Archivos:** 8 (`src/data/fallback-fixtures.ts`), 20 (`src/engines/fallback-engine.ts`) y el test 34 (`src/engines/fallback-engine.test.ts`, 15 tests).
+- **Conexión:** la instancia del store usa ya `createFallbackEngine(getState, sleep)` en lugar del motor provisional de la fase 3. La fábrica recibe el motor como `(getState) => TriageEngine`, porque necesita leer el estado actual del store.
+- **Comprobación con mutaciones:** se cambió la gravedad de S7, se quitó la relación de S6, se apuntó S5 al ancla equivocada y se quitó la espera de 600 ms. Los tests fallaron en los cuatro casos y el código quedó restaurado.
+
+**Resultado de la ráfaga sin API** (coincide exactamente con los valores principales de los resultados esperados):
+
+| Incidente | Avisos | Categoría | Gravedad | Protocolo | Relación |
+|---|---|---|---|---|---|
+| INC-1 | S1, S2, S4, S7 | Incendio/Humo | Crítica | `evac-plan` | — |
+| INC-2 | S3, S5 | Fallo Eléctrico | Media | `notify` | — |
+| INC-3 | S6 | Incendio/Humo | Alta | `evac-nearest` | INC-1 |
+| INC-4 | S8 | Médico | Media | `notify` | — |
+| INC-5 | S9 | «Fuga de agua» (no oficial) | Media | `notify` | — |
+
+Es determinista: dos ejecuciones dan el mismo resultado (se compara el estado completo), también tras «Reiniciar», y por la cola y el store da lo mismo que directamente. No hace ninguna llamada a la IA ni pide contraseña.
+
+**Decisiones de implementación que el diseño dejaba abiertas:**
+- Los textos de resumen y motivo de las respuestas son fijos, en español, y no inventan ubicaciones, rutas ni instrucciones.
+- Un aviso que no es del guion (sin `scriptKey`) devuelve `server` en lugar de inventar una respuesta. En la aplicación no llega a ocurrir, porque el formulario manual está desactivado en este modo y la cola lo ignora.
+- La espera de ~600 ms del motor más la pausa de 300 ms de la cola dan unos 8 s por ráfaga, como estimaba el diseño. Los tests usan un `sleep` inyectado y no esperan de verdad.
+
+**No se ha desplegado:** esta fase no tiene cambios visibles, porque la interfaz es de la fase 5.
+
+## Fase 5 (interfaz): resultado
+
+**Autorización:** el autor autorizó expresamente la fase 5, con el objetivo de una primera versión visual, funcional y demostrable, sin animaciones ni funcionalidades fuera del diseño.
+
+**Hecho** (144 tests en verde, `typecheck` y `build` sin errores, desplegado en https://emergency-triage-phi.vercel.app):
+- **shadcn/ui:** inicializado. Componentes: `button`, `card`, `badge`, `dialog`, `alert-dialog`, `select`, `textarea`, `input`, `label`, `switch` y `tooltip` (este último sin usar).
+- **Pantalla única** (`src/routes/index.tsx`): cabecera con «Demo con datos ficticios» y «Modo: IA / Sin API»; panel lateral; feed de avisos; tablero con las columnas Pendiente, Validado y Descartado. El botón temporal de las fases 0 a 2 se ha quitado.
+- **Componentes:** `ControlPanel`, `ReportFeed`, `IncidentBoard`, `IncidentCard`, `EditIncidentDialog` y `PasswordDialog`. Leen el store y usan los selectores y acciones del dominio. No contienen reglas de elegibilidad ni lógica de negocio.
+- **`src/routes/__root.tsx`:** `lang="es"`, título y descripción, y un icono en línea (evita el 404 de `/favicon.ico`). Se quitó el panel de devtools de la plantilla.
+
+**Comprobaciones con un navegador real** (Edge, con `playwright-core` instalado fuera del repositorio; los scripts no forman parte del repositorio):
+
+| Recorrido | Local | URL pública |
+|---|---|---|
+| Modo sin API: ráfaga, controles desactivados mientras procesa, aprobar categoría, editar, validar, descartar, reiniciar (26 comprobaciones, repetido 3 veces en local) | 26/26 | 26/26 |
+| Modo IA: diálogo de contraseña (no se cierra con Escape ni con un clic fuera), contraseña incorrecta sin perder el aviso, IA real, CUJ 2, 3, 4 y 5 (19 comprobaciones) | 19/19 | 19/19 |
+| CUJ 7: error del servidor, «Reintentar», la cola sigue con el siguiente aviso (con un `TRIAGE_MODEL` no válido) | 5/5 | — |
+| Ráfaga con IA real desde la interfaz | 5 incidentes, coincide con el guion | — |
+
+También: sin errores ni avisos en la consola del navegador (incluida la hidratación), y ningún valor de `DEMO_PASSWORD` ni de la clave de Google en el bundle público.
+
+**Defectos encontrados y corregidos durante las pruebas:**
+- Las tarjetas de incidente y los avisos del feed se comprimían y quedaban recortados dentro de columnas con altura fija: se les ha puesto `shrink-0`.
+- Los botones del pie de las tarjetas se salían por la derecha: ahora se envuelven.
+- `/favicon.ico` devolvía 404 y ensuciaba la consola: se añadió un icono en línea.
+- Un problema de mi entorno de pruebas (un servidor antiguo seguía en marcha tras reconstruir) parecía un fallo de hidratación; no lo era.
+
+**Observaciones:**
+- **Fallo transitorio real del proveedor:** en una de las pruebas, Gemini devolvió un error y el aviso quedó como «Error: fallo del servidor» con «Reintentar». La interfaz lo trató como prevé el CUJ 7. No hay reintento automático, por diseño.
+- **El resultado de la IA no es determinista:** en la prueba anterior, el grupo E no creó «Fuga de agua»; en la última ráfaga de la interfaz sí. Es el problema de la fase 6, no se ha tocado el prompt.
+- **Latencia variable:** la ráfaga con IA real tardó 41 s en una medición y 14 s en otra.
+
+**Decisiones de implementación que el diseño dejaba abiertas:**
+- Los textos de ayuda («Solo con el tablero vacío», etc.) son texto bajo el control, no tooltips.
+- El diálogo de edición solo envía los campos modificados, para que solo esos queden bloqueados.
+- Diseño de escritorio, con un ancho mínimo de 1180 px; no hay vista móvil (es un Non-Goal).
+- El progreso «n/9» y «Estado de la cola» están en el panel lateral.
+
+**Problemas con la inicialización de shadcn** (ver el archivo 2 del diseño): el asistente de la versión 4.23.0 no aceptó todos los valores por flags y escribió valores de Next.js. Se resolvió corrigiendo `components.json` y repitiendo `init`.
+
+**Limitaciones pendientes:**
+- Los scripts de prueba del navegador no están en el repositorio, así que no hay pruebas de interfaz automáticas; solo las unitarias del dominio.
+- Nada se ha probado en móvil ni con lectores de pantalla, más allá de las etiquetas básicas.
+- Los límites exactos del nivel gratuito de Gemini siguen sin verificarse.
+
+## Fase 6 (ajuste del prompt): resultado
+
+**Autorización:** el autor autorizó la fase 6 con un objetivo prioritario: que S9 (fuga de agua en Laboratorios) proponga la categoría nueva «Fuga de agua» en lugar de un fallo eléctrico, sin cambiar el modelo, el proveedor, el dominio, el store, la cola, el fallback ni la interfaz, y con pocas llamadas reales.
+
+**Cambio realizado** (solo `src/ai/prompt.ts`, `PROMPT_VERSION` de `v1` a `v2`):
+- **Causa:** la sección de categoría decía «solo si ninguna categoría encaja» sin definir «encajar». El modelo razonaba «problema de instalaciones» y elegía «Fallo Eléctrico» por parecido de efecto.
+- **Sección 5 reescrita:** una categoría solo vale si su nombre describe el **tipo de suceso** (la causa, no sus efectos). No se elige la más cercana por aproximación; que un suceso afecte a una instalación, un servicio o una zona no lo convierte en un suceso de esa categoría. Si ninguna describe el suceso, se propone una nueva (nombre corto, genérico y habitual para ese tipo de suceso). El motivo debe decir qué suceso se identificó.
+- **Recordatorio** de una línea al final del mensaje de usuario.
+- **No se han añadido ejemplos** ni textos del guion. Un test lo vigila.
+
+**Resultados con Gemini (`gemini-3.5-flash-lite`, ~45 llamadas en total, incluidas las de las mediciones previas):**
+
+| Prueba | `v1` | `v2` |
+|---|---|---|
+| S9 aislado | 3 de 4 correctas | **5 de 5** válidas (+1 timeout) |
+| S9 en ráfagas completas | 3 de 5 correctas | 2 de 2 con respuesta (una tercera se cortó por 429) |
+| S1 a S8 | sin cambios apreciables | una ráfaga completa coincide en los 5 grupos; una segunda coincide salvo S7 (error transitorio del proveedor); una tercera se cortó por 429 con S1 a S3 y S6 correctos |
+
+**Resultado: S9 mejora claramente, pero no se puede afirmar que sea fiable.** Los motivos de la IA muestran ahora que identifica «filtración o fuga de agua» antes de decidir. La muestra es pequeña (7 respuestas de S9 con `v2`, todas correctas) y la IA no es determinista. No he introducido cambios más complejos, como pidió el autor.
+
+**Comportamiento que sigue siendo variable:**
+- **Errores transitorios del proveedor:** ~4 de ~45 llamadas (dos `server`, un timeout y un 429). Sin reintento automático, por diseño. Un aviso en error puede dejar la ráfaga incompleta; en una prueba, INC-1 quedó en «Alta» y no «Crítica» porque falló S7.
+- **Cuota:** primer indicio de límite. Tras ~28 llamadas en pocos minutos, 5 avisos seguidos devolvieron `rate_limit`. Con 3 s entre llamadas no volvió a ocurrir, así que parece un límite por minuto. El valor exacto sigue sin verificarse.
+- **Condición de salida:** «tres ráfagas seguidas que cumplan el criterio» **no se cumplió literalmente**, por la cuota y por el límite de llamadas fijado.
+
+**Tests** (147 en verde, 3 nuevos en `contract.test.ts`): la sección de categoría contiene las reglas (tipo de suceso, no la más cercana, no forzar, nombre nuevo corto); el prompt no contiene ningún aviso del guion ni palabras propias de él; y el mensaje de usuario recuerda la regla y marca las categorías no oficiales. Comprobado con dos mutaciones (volver a la sección antigua y copiar el guion en un ejemplo).
+
+**No se ha desplegado.** La URL pública sigue con el prompt `v1`. La interfaz y el resto del código no han cambiado.
+
+## Fase 7 (cierre y entrega): resultado
+
+**Autorización:** el autor autorizó la fase 7 (publicación, comprobación final, documentación y limpieza), sin ampliar el alcance, sin modificar el diseño y sin hacer commits.
+
+**Publicación**
+- Desplegado el prompt `v2` en producción: https://emergency-triage-phi.vercel.app. El despliegue activo es el nuevo (estado Ready) y el log de producción confirma `promptVersion: "v2"`, el modelo `gemini-3.5-flash-lite` y `outcome: "ok"`.
+- **Secretos:** se descargó el bundle público real (4 ficheros, 582 KB) y se buscaron los valores de `GOOGLE_GENERATIVE_AI_API_KEY`, `DEMO_PASSWORD` y el token OIDC, además del patrón de claves de Google (`AIza…`). Ninguno aparece. El prompt y la lógica del servidor tampoco están en el cliente.
+
+**Comprobación final**
+- 147 tests en verde, `typecheck` sin errores, `build` sin errores.
+- URL pública, modo sin API (navegador real): 26 de 26 comprobaciones (ráfaga, controles desactivados mientras procesa, aprobar categoría, editar, validar, descartar y reiniciar). La ráfaga tarda 8,3 s.
+- URL pública, modo IA: **una sola llamada real**, S9 desde la interfaz. Resultado: INC-1, Media, «Fuga de agua» como categoría no oficial con «Aprobar categoría», en 1,9 s y con la consola limpia. No se lanzaron ráfagas ni baterías de llamadas, y no apareció ningún 429 ni error del proveedor.
+
+**Documentación y limpieza**
+- `README.md`: qué es, advertencia de datos ficticios, stack y la desviación respecto a AI Gateway con su motivo, instalación, variables de entorno, comandos, despliegue, cómo probar cada modo (con la tabla de resultados esperados), arquitectura, decisiones y limitaciones.
+- Se verificó que `npm run dev` carga `.env.local` y que `npm start` lo carga con `--env-file-if-exists` (el script `start` se ha cambiado para ello).
+- Retirado lo que sobraba de la plantilla: el panel de devtools y los paquetes `@tanstack/react-devtools`, `@tanstack/react-router-devtools` y `@tanstack/devtools-vite` (con su plugin en `vite.config.ts`), y el script `generate-routes`, duplicado de `build`.
+- No quedaba código temporal de las fases. El único `console.log` es el log del paso 9 del diseño.
+- No se ha modificado `docs/designs/emergency_triage.md` en esta fase.
+
+**Hallazgo nuevo documentado:** con `gemini-3.5-flash-lite`, `reasoning: 'none'` no desactiva el razonamiento: el SDK lo traduce a esfuerzo `minimal` y lo avisa en el log. Cumple lo previsto en el diseño («desactivado o al mínimo»). La nota sobre `thinkingBudget: 0` del registro de la fase 0 solo vale para los modelos Gemini 2.5.
+
+**No se ha podido completar o sigue sin verificar**
+- Los límites exactos del nivel gratuito de Gemini (la API no los devuelve).
+- Pruebas automáticas de interfaz (no se han creado; la interfaz se verificó a mano con un navegador real).
+- Que la cuenta de Google no tenga facturación activa: solo el autor puede comprobarlo en AI Studio.
+- La fiabilidad de S9 con IA real: una respuesta más correcta (8 de 8 con `v2`), pero muestra pequeña.
+- El despliegue automático por push: el proyecto de Vercel no está conectado a GitHub; cada despliegue es manual con la CLI.

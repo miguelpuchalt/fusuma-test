@@ -2,6 +2,7 @@ import { APICallError, generateText, NoObjectGeneratedError, Output } from 'ai'
 import { MockLanguageModelV4 } from 'ai/test'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
+import { BURST_SCRIPT } from '../data/burst-script'
 import { PROTOCOLS } from '../data/protocols'
 import {
   createInitialState,
@@ -386,6 +387,46 @@ describe('prompt', () => {
     for (let n = 1; n <= 7; n++) expect(system).toContain(`# ${n}.`)
     expect(system).toContain('Ante la duda, separa')
     expect(system).toContain('critical (Crítica)')
+  })
+
+  it('la sección de categoría pide identificar el tipo de suceso y no forzar la categoría más cercana', () => {
+    const system = buildSystemPrompt()
+    const category = system.slice(system.indexOf('# 5.'), system.indexOf('# 6.'))
+    // Una categoría solo vale si su nombre describe el tipo de suceso, no sus efectos.
+    expect(category).toContain('tipo de suceso')
+    expect(category).toContain('no sus efectos')
+    expect(category).toContain('No elijas la categoría más cercana')
+    expect(category).toContain('no fuerces una categoría')
+    // Cuando ninguna encaja, se propone una nueva con un nombre corto y genérico.
+    expect(category).toContain('newCategoryName')
+    expect(category).toContain('máximo 40 caracteres')
+    expect(category).toContain('Exactamente uno de los dos campos')
+    // El motivo debe decir qué suceso se identificó.
+    expect(category).toContain('rationale')
+  })
+
+  it('el prompt no memoriza la ráfaga: no copia ningún aviso del guion ni sus detalles', () => {
+    const system = buildSystemPrompt().toLowerCase()
+    for (const entry of BURST_SCRIPT) {
+      expect(system, entry.key).not.toContain(entry.text.toLowerCase())
+    }
+    // Palabras propias de los avisos del guion y de su categoría nueva esperada.
+    for (const word of ['fuga', 'filtración', 'charco', 'fotocopiadora', 'desmay', 'cafetería', 'recepción', 'falso techo', 'sala 2.04']) {
+      expect(system, word).not.toContain(word)
+    }
+  })
+
+  it('el mensaje de usuario recuerda la regla de categoría y marca las no oficiales', () => {
+    const base = scenario().state
+    const withNew = process(base, 'w', -1, { category: { newName: 'Fuga de agua' } }, 'laboratorios', 'Cae agua')
+    const made = createReport(withNew, { id: 'n', buildingId: 'laboratorios', floor: -1, text: 'Otro aviso', createdAt: 0 })
+    const state = markProcessing(enqueueReports(made.state, [made.report]), 'n')
+    const input = buildTriageInput(state, 'n')
+    const user = buildUserPrompt(input, buildAliases(input), eligibilityFlags(input))
+    expect(user).toContain('Fuga de agua (no oficial)')
+    expect(user).toContain('Incendio/Humo') // las oficiales, sin marca
+    expect(user).not.toContain('Incendio/Humo (no oficial)')
+    expect(user).toContain('elige una categoría solo si su nombre describe el tipo de suceso')
   })
 
   it('el mensaje de usuario usa alias y nunca IDs reales', () => {

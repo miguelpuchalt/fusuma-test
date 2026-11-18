@@ -1,70 +1,44 @@
-import { useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
-import { BURST_SCRIPT } from '#/data/burst-script'
-import {
-  createInitialState,
-  createReport,
-  enqueueReports,
-  markProcessing,
-} from '#/domain/actions'
-import { buildTriageInput } from '#/domain/selectors'
-import { triageReport } from '#/server/triage-report'
+import { Siren } from 'lucide-react'
+import { useTriageStore } from '#/store/triage-store'
+import { ControlPanel } from '#/components/ControlPanel'
+import { IncidentBoard } from '#/components/IncidentBoard'
+import { PasswordDialog } from '#/components/PasswordDialog'
+import { ReportFeed } from '#/components/ReportFeed'
+import { Badge } from '#/components/ui/badge'
 
 export const Route = createFileRoute('/')({ component: Home })
 
-// FASE 0-2: botón temporal. Se quita en la fase 5.
-function buildS1Request() {
-  const s1 = BURST_SCRIPT[0]!
-  const made = createReport(createInitialState('llm'), {
-    id: 'temp-s1',
-    buildingId: s1.buildingId,
-    floor: s1.floor,
-    text: s1.text,
-    createdAt: Date.now(),
-    scriptKey: s1.key,
-  })
-  const state = markProcessing(enqueueReports(made.state, [made.report]), 'temp-s1')
-  return buildTriageInput(state, 'temp-s1')
-}
-
+// Pantalla única: cabecera, panel lateral, feed de avisos y tablero de incidentes.
 function Home() {
-  const [password, setPassword] = useState('')
-  const [output, setOutput] = useState('')
-  const [busy, setBusy] = useState(false)
-
-  async function run() {
-    setBusy(true)
-    try {
-      const res = await triageReport({ data: { password, ...buildS1Request() } })
-      setOutput(JSON.stringify(res, null, 2))
-    } catch (e) {
-      setOutput('Error de red o de la Server Function: ' + String(e))
-    } finally {
-      setBusy(false)
-    }
-  }
+  const mode = useTriageStore((s) => s.state.mode)
 
   return (
-    <div className="p-8 max-w-2xl">
-      <h1 className="text-3xl font-bold">EmergencyTriage — fase 2</h1>
-      <p className="mt-2">
-        Demo con datos ficticios. Llamada temporal con el aviso S1.
-      </p>
-      <input
-        type="password"
-        className="mt-4 block border p-2 w-full"
-        placeholder="Contraseña de demo"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-      />
-      <button
-        className="mt-2 border px-3 py-2 disabled:opacity-50"
-        disabled={busy || password.length === 0}
-        onClick={run}
-      >
-        {busy ? 'Llamando…' : 'Probar triageReport con S1'}
-      </button>
-      <pre className="mt-4 text-sm whitespace-pre-wrap">{output}</pre>
+    <div className="flex h-screen min-w-[1180px] flex-col bg-background text-foreground">
+      <header className="flex items-center justify-between gap-4 border-b px-5 py-3">
+        <div className="flex items-center gap-2">
+          <Siren className="size-5" aria-hidden />
+          <h1 className="text-lg font-semibold">EmergencyTriage</h1>
+        </div>
+        <div className="flex items-center gap-2">
+          <Badge variant="outline">Demo con datos ficticios</Badge>
+          <Badge variant={mode === 'llm' ? 'default' : 'secondary'} data-testid="mode-badge">
+            Modo: {mode === 'llm' ? 'IA' : 'Sin API'}
+          </Badge>
+        </div>
+      </header>
+
+      <main className="grid min-h-0 flex-1 grid-cols-[300px_340px_1fr] gap-5 p-5">
+        <aside className="overflow-y-auto pr-1">
+          <ControlPanel />
+        </aside>
+        <div className="flex min-h-0 flex-col">
+          <ReportFeed />
+        </div>
+        <IncidentBoard />
+      </main>
+
+      <PasswordDialog />
     </div>
   )
 }
