@@ -19,7 +19,7 @@ export function IncidentBoard() {
   )
 
   return (
-    <section className="grid min-h-0 flex-1 grid-cols-3 gap-3" aria-label="Tablero de incidentes">
+    <section className="grid min-h-0 flex-1 grid-cols-[2fr_1fr_1fr] gap-3" aria-label="Tablero de incidentes">
       {columns.map((column) => (
         <div
           key={column.state}
