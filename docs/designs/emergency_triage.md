@@ -1,7 +1,7 @@
 # EmergencyTriage
 
-*   **Author:** JackElSimple
-*   **Status:** Approved (diseño cerrado; la fase 0 está pendiente de autorización)
+*   **Author:** Miguel Ángel Puchalt Rosillo
+*   **Status:** Approved
 *   **Date:** 2026-11-18
 
 --------------------------------------------------------------------------------
@@ -10,11 +10,11 @@
 
 EmergencyTriage es un prototipo de consola de operaciones para incidentes en edificios. Recibe avisos de texto libre, usa una IA para proponer cómo agruparlos en incidentes y deja que una persona responsable de seguridad valide o descarte cada incidente.
 
-Es la entrega de una prueba técnica de un proceso de selección: 2 días, unas 24 horas de trabajo. Trabaja solo con datos ficticios y **no es un sistema real de gestión de emergencias**. Se presenta en directo en una entrevista técnica.
+Trabaja solo con datos ficticios y **no es un sistema real de gestión de emergencias**.
 
 **Criterio de diseño.** La prioridad es un recorrido completo, desplegado y demostrable de principio a fin. Se prefiere una aplicación pequeña con limitaciones conocidas y documentadas antes que mecanismos que no lleguen a implementarse. Cada funcionalidad tiene que justificar su coste frente a lo que aporta a la demo.
 
-El stack lo fija el enunciado: React, TypeScript, **TanStack Start con SSR**, shadcn/ui, Vercel AI SDK y Vercel AI Gateway, con despliegue en Vercel (plan Hobby). **Desviación deliberada:** la IA se llama directamente a la Gemini Developer API con `@ai-sdk/google`, sin AI Gateway (ver «Desviación del enunciado»). El objetivo de coste es 0 €. El código vive en este repositorio (`fusuma-test`).
+El stack: React, TypeScript, **TanStack Start con SSR**, shadcn/ui, Vercel AI SDK y Vercel AI Gateway, con despliegue en Vercel (plan Hobby). **Desviación deliberada:** la IA se llama directamente a la Gemini Developer API con `@ai-sdk/google`, sin AI Gateway (ver «Desviación del enunciado»). El objetivo de coste es 0 €. El código vive en este repositorio (`fusuma-test`).
 
 ### Relación con documentos anteriores
 
