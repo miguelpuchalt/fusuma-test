@@ -31,6 +31,11 @@ npm run dev                    # http://localhost:3000
 | `npm test` | 147 tests unitarios con Vitest. |
 | `npm run typecheck` | `tsc --noEmit`. |
 
+npm install                      # solo la primera vez
+npx vercel@latest login          # solo la primera vez: te da un enlace para autorizar en el navegador
+npx vercel@latest link           # solo la primera vez: elige el proyecto «emergency-triage»
+npx vercel@latest deploy --prod  # despliega a producción
+
 ### Variables de entorno
 
 Solo existen en el servidor. Ninguna lleva el prefijo `VITE_`, así que no llegan al navegador. `.env.local` está ignorado por git.
