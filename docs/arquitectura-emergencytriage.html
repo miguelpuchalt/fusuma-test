@@ -138,6 +138,65 @@ table.tr td.name code { font-family: Consolas, ui-monospace, monospace; font-wei
 .fsub { font-size: 16px; fill: var(--ink2); }
 .flink { fill: none; stroke: var(--blue); stroke-width: 2.5; stroke-dasharray: 8 7; }
 
+/* Qué ve la IA y su arnés */
+.ctx { position: absolute; left: 96px; top: 166px; width: 520px; height: 652px; background: #fff; border: 1.5px solid var(--edge); border-radius: 6px; padding: 20px 22px; cursor: default; }
+.ctx h3, .gates-h { margin: 0; font-family: "Barlow Condensed", sans-serif; font-weight: 700; font-size: 28px; }
+.ctx .sub { font-size: 16px; color: var(--ink2); margin-top: 2px; }
+.ctx .it { display: grid; grid-template-columns: 28px 1fr; gap: 4px 10px; padding: 11px 0; border-top: 1px solid #EDF1F7; }
+.ctx .it:first-of-type { border-top: 0; }
+.ctx .it .ic { color: var(--blue); font-size: 22px; padding-top: 2px; }
+.ctx .it b { font-family: "Barlow Condensed", sans-serif; font-size: 22px; }
+.ctx .it .x { grid-column: 2; font-size: 16px; color: var(--ink2); line-height: 1.35; }
+.ctx .it code { font-size: 14.5px; color: var(--ink); background: #F1F4F9; border-radius: 4px; padding: 1px 6px; }
+.ctx .never { margin-top: 10px; padding: 9px 12px; border-left: 4px solid var(--green); background: var(--green-soft); font-size: 16px; font-weight: 600; color: #145F3E; }
+.gates { position: absolute; left: 660px; top: 166px; width: 880px; cursor: default; }
+.gate { display: grid; grid-template-columns: 52px 180px 1fr 240px; align-items: center; gap: 14px; height: 118px; margin-bottom: 12px; padding: 0 18px; background: #fff; border: 1.5px solid var(--edge); border-radius: 6px; opacity: .2; transition: opacity .35s, border-color .35s, box-shadow .35s; }
+.gate.vis { opacity: 1; }
+.gate.cur { border-color: var(--blue); box-shadow: 0 0 0 4px var(--blue-soft); }
+.gate .n { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--blue); color: #fff; font-family: "Barlow Condensed", sans-serif; font-weight: 700; font-size: 24px; }
+.gate.person .n { background: var(--green); }
+.gate .nm b { display: block; font-family: "Barlow Condensed", sans-serif; font-size: 26px; line-height: 1.05; }
+.gate .nm span { display: inline-block; margin-top: 4px; font-size: 14px; font-weight: 600; padding: 1px 9px; border-radius: 999px; border: 1.5px solid var(--blue); color: var(--blue); }
+.gate .what { font-size: 17px; line-height: 1.35; }
+.gate .fail { font-size: 15px; line-height: 1.3; color: #7A2018; background: #FDECEA; border-radius: 4px; padding: 7px 10px; }
+.gate.person .fail, .gate.rules .fail { color: #145F3E; background: var(--green-soft); }
+.gate-hdr { display: grid; grid-template-columns: 52px 180px 1fr 240px; gap: 14px; padding: 0 18px; font-size: 14px; font-weight: 600; color: var(--ink2); position: absolute; left: 660px; top: 136px; width: 880px; }
+
+/* Cómo viaja la información */
+.actor { fill: #fff; stroke: var(--blue); stroke-width: 2; }
+.actor-t { font-family: "Barlow Condensed", sans-serif; font-weight: 700; font-size: 26px; fill: var(--ink); }
+.lifeline { stroke: var(--line); stroke-width: 2; stroke-dasharray: 6 6; }
+.act { fill: #E4ECFB; stroke: var(--blue); stroke-width: 1; }
+.msg { transition: opacity .35s; }
+.msg.dim { opacity: .14; }
+.msg .ml { stroke: var(--blue); stroke-width: 2.5; fill: none; }
+.msg.ret .ml { stroke: var(--green); stroke-dasharray: 8 6; }
+.msg .mt { font-family: Consolas, ui-monospace, monospace; font-size: 17px; fill: var(--ink); }
+.msg.cur .ml { stroke-width: 4; }
+.frag { fill: rgba(18, 35, 61, .02); stroke: rgba(18, 35, 61, .22); stroke-width: 1.2; }
+.frag-t { font-size: 15px; font-weight: 600; fill: var(--ink2); }
+.wnote { position: absolute; top: 744px; background: #fff; border: 1.5px solid var(--edge); border-radius: 6px; padding: 12px 16px; font-size: 17px; line-height: 1.35; cursor: default; }
+.wnote b { font-family: "Barlow Condensed", sans-serif; font-size: 21px; display: block; }
+
+/* Modelo de datos */
+.ent { position: absolute; background: #fff; border: 1.5px solid var(--ink2); border-radius: 6px; overflow: hidden; padding-bottom: 12px; cursor: default; }
+.ent.root { border-color: var(--blue); border-width: 2px; }
+.ent.fixed { border-style: dashed; border-color: var(--mute); }
+.ent .hd { height: 44px; display: flex; align-items: baseline; gap: 10px; padding: 9px 14px 0; border-bottom: 1px solid #E3E9F3; background: #F7F9FC; }
+.ent .hd b { font-family: "Barlow Condensed", sans-serif; font-size: 24px; }
+.ent .hd span { font-family: Consolas, ui-monospace, monospace; font-size: 14px; color: var(--ink2); }
+.ent .row { height: 30px; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 14px; font-size: 15px; }
+.ent .row code { font-family: Consolas, ui-monospace, monospace; font-size: 15px; color: var(--ink); }
+.ent .row code.pk { color: var(--blue); font-weight: 700; }
+.ent .row code.fk { color: var(--blue); }
+.ent .row span { color: var(--ink2); font-size: 14px; text-align: right; white-space: nowrap; }
+.rel { fill: none; stroke: var(--ink2); stroke-width: 1.8; }
+.rel.fx { stroke-dasharray: 6 5; stroke: var(--mute); }
+.card-t { font-family: "Barlow Condensed", sans-serif; font-weight: 700; font-size: 18px; fill: var(--ink2); }
+.relt { font-size: 14px; fill: var(--ink2); font-weight: 600; }
+.ernote { position: absolute; left: 80px; top: 680px; width: 1040px; font-size: 18px; line-height: 1.45; color: var(--ink2); cursor: default; }
+.ernote b { color: var(--ink); }
+
 /* Barra inferior */
 .bar { position: absolute; left: 0; right: 0; bottom: 0; height: 46px; display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 0 24px; font-size: 16px; color: var(--ink2); cursor: default; }
 .prog { position: absolute; left: 0; bottom: 0; height: 4px; width: 0; background: var(--blue); transition: width .4s; }
@@ -162,7 +221,7 @@ table.tr td.name code { font-family: Consolas, ui-monospace, monospace; font-wei
 .keys { margin-top: 14px; padding-top: 10px; border-top: 1px solid #EFE3B5; font-size: 13.5px; color: #7A6A2F; }
 
 @media (prefers-reduced-motion: reduce) {
-  .scene, .scene.on, #diagram, .zgroup, .e, .nd .nb, .chip .cb, .chip .ct, .tok, .offlbl, table.tr td, .prog { transition: none !important; }
+  .scene, .scene.on, #diagram, .zgroup, .e, .nd .nb, .chip .cb, .chip .ct, .tok, .offlbl, table.tr td, .prog, .gate, .msg { transition: none !important; }
 }
 </style>
 </head>
@@ -322,7 +381,139 @@ table.tr td.name code { font-family: Consolas, ui-monospace, monospace; font-wei
     <div class="cap" id="cap"><div class="n" id="cap-n"></div><div><div class="w" id="cap-w"></div><div class="s" id="cap-s"></div><span class="where" id="cap-where"></span></div></div>
   </section>
 
-  <!-- C · Traductor -->
+  <!-- C · Qué ve la IA y cómo se controla -->
+  <section class="scene" id="s-ai">
+    <h2 class="title">Qué ve la IA y cómo se controla</h2>
+    <div class="ctx">
+      <h3>Lo que recibe</h3>
+      <div class="sub">Instrucciones fijas y el estado de un solo edificio</div>
+      <div class="it"><span class="ic"><svg class="i"><use href="#i-list"/></svg></span><b>Instrucciones</b><span class="x">Propone, no decide. Ante la duda, separa. No inventa ubicaciones, rutas ni teléfonos.</span></div>
+      <div class="it"><span class="ic"><svg class="i"><use href="#i-phone"/></svg></span><b>El aviso nuevo</b><span class="x">Entre <code>&lt;aviso&gt;…&lt;/aviso&gt;</code>: es un dato, no una orden. El texto no puede cerrar la etiqueta.</span></div>
+      <div class="it"><span class="ic"><svg class="i"><use href="#i-box"/></svg></span><b>Incidentes del edificio</b><span class="x">Con sus avisos y dos marcas: «puede unirse» y «puede relacionarse». Hasta 30 incidentes, 150 avisos y 128 KB.</span></div>
+      <div class="it"><span class="ic"><svg class="i"><use href="#i-lock"/></svg></span><b>Alias, no IDs reales</b><span class="x">Incidentes I1, I2…, categorías C1, C2… y protocolos P1 a P5.</span></div>
+      <div class="it"><span class="ic"><svg class="i"><use href="#i-spark"/></svg></span><b>Ajustes de la llamada</b><span class="x">Temperatura 0, máximo 800 tokens, 15 segundos y ningún reintento automático.</span></div>
+      <div class="never">No ve la clave, ni otros edificios, ni los identificadores reales.</div>
+    </div>
+    <div class="gate-hdr"><span></span><span>Control</span><span>Qué exige</span><span>Si no se cumple</span></div>
+    <div class="gates">
+      <div class="gate" data-g="1"><span class="n">1</span><div class="nm"><b>Formato fijo</b><span>Vercel, AI SDK</span></div><div class="what">Un objeto con 9 campos; acción y gravedad solo con valores cerrados.</div><div class="fail">Error «respuesta no válida» y botón Reintentar</div></div>
+      <div class="gate" data-g="2"><span class="n">2</span><div class="nm"><b>Coherencia</b><span>Vercel</span></div><div class="what">«Unir» exige un incidente destino. Una sola categoría: existente o nueva.</div><div class="fail">Se rechaza como respuesta no válida</div></div>
+      <div class="gate" data-g="3"><span class="n">3</span><div class="nm"><b>Referencias</b><span>Vercel</span></div><div class="what">Solo alias que existen. Textos recortados a 300, 200 y 40 caracteres.</div><div class="fail">Categoría o protocolo inventado: se rechaza. Incidente inventado: se crea uno</div></div>
+      <div class="gate rules" data-g="4"><span class="n">4</span><div class="nm"><b>Reglas de negocio</b><span>Navegador</span></div><div class="what">Unir solo con un pendiente de la misma planta. La gravedad nunca baja. No toca lo editado ni lo validado.</div><div class="fail">Si no puede unir, crea un incidente nuevo</div></div>
+      <div class="gate person" data-g="5"><span class="n">5</span><div class="nm"><b>Persona</b><span>Operador</span></div><div class="what">Valida o descarta cada incidente. Una categoría nueva es «No oficial» hasta aprobarla.</div><div class="fail">Nada queda validado sin su decisión</div></div>
+    </div>
+  </section>
+
+  <!-- D · Cómo viaja la información -->
+  <section class="scene" id="s-wire">
+    <h2 class="title">Cómo viaja la información</h2>
+    <svg width="1600" height="900" style="position:absolute;left:0;top:0" role="img" aria-labelledby="w-t">
+      <title id="w-t">Mensajes entre navegador, Vercel y Google: carga de la página y análisis de un aviso</title>
+      <defs>
+        <marker id="w-blue" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="15" markerHeight="15" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#2A5BD7"/></marker>
+        <marker id="w-green" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="15" markerHeight="15" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#1B8A57"/></marker>
+      </defs>
+      <rect class="frag" x="120" y="214" width="1360" height="172" rx="6"/>
+      <text class="frag-t" x="136" y="238">Al abrir la página</text>
+      <rect class="frag" x="120" y="400" width="1360" height="328" rx="6"/>
+      <text class="frag-t" x="136" y="424">Cada aviso, con IA</text>
+      <line class="lifeline" x1="300" y1="196" x2="300" y2="730"/>
+      <line class="lifeline" x1="800" y1="196" x2="800" y2="730"/>
+      <line class="lifeline" x1="1300" y1="196" x2="1300" y2="730"/>
+      <rect class="act" x="793" y="262" width="14" height="86"/>
+      <rect class="act" x="793" y="452" width="14" height="246"/>
+      <rect class="act" x="1293" y="532" width="14" height="86"/>
+      <rect class="actor" x="160" y="128" width="280" height="68" rx="6"/><text class="actor-t" x="300" y="160" text-anchor="middle">Navegador</text><text class="frag-t" x="300" y="184" text-anchor="middle">pantalla y estado</text>
+      <rect class="actor" x="660" y="128" width="280" height="68" rx="6"/><text class="actor-t" x="800" y="160" text-anchor="middle">Vercel</text><text class="frag-t" x="800" y="184" text-anchor="middle">servidor (Server Function)</text>
+      <rect class="actor" x="1160" y="128" width="280" height="68" rx="6"/><text class="actor-t" x="1300" y="160" text-anchor="middle">Google</text><text class="frag-t" x="1300" y="184" text-anchor="middle">modelo Gemini</text>
+      <g class="msg" data-m="1"><path class="ml" d="M306 270H791" marker-end="url(#w-blue)"/><text class="mt" x="550" y="260" text-anchor="middle">GET /</text><text class="frag-t" x="550" y="292" text-anchor="middle">petición normal de la página</text></g>
+      <g class="msg ret" data-m="2"><path class="ml" d="M793 340H306" marker-end="url(#w-green)"/><text class="mt" x="550" y="330" text-anchor="middle">HTML ya pintado + JS y CSS</text><text class="frag-t" x="550" y="362" text-anchor="middle">SSR: pantalla inicial vacía; luego React toma el control</text></g>
+      <g class="msg" data-m="3"><path class="ml" d="M306 470H791" marker-end="url(#w-blue)"/><text class="mt" x="550" y="460" text-anchor="middle">POST /_serverFn/…  JSON</text><text class="frag-t" x="550" y="492" text-anchor="middle">aviso, contexto del edificio y contraseña (serializado con seroval)</text></g>
+      <g class="msg" data-m="4"><path class="ml" d="M807 550H1291" marker-end="url(#w-blue)"/><text class="mt" x="1050" y="540" text-anchor="middle">POST …:generateContent  JSON</text><text class="frag-t" x="1050" y="572" text-anchor="middle">instrucciones y contexto con alias; clave en x-goog-api-key</text></g>
+      <g class="msg ret" data-m="5"><path class="ml" d="M1293 610H809" marker-end="url(#w-green)"/><text class="mt" x="1050" y="600" text-anchor="middle">JSON con el formato exigido</text><text class="frag-t" x="1050" y="632" text-anchor="middle">el SDK lo convierte en objeto y lo valida con Zod</text></g>
+      <g class="msg ret" data-m="6"><path class="ml" d="M793 690H306" marker-end="url(#w-green)"/><text class="mt" x="550" y="680" text-anchor="middle">TriageResult  JSON</text><text class="frag-t" x="550" y="712" text-anchor="middle">{ ok: true, decision } o { ok: false, error }</text></g>
+    </svg>
+    <div class="wnote" style="left:120px;width:430px"><b>Dentro del navegador</b>Objetos JavaScript en memoria (Zustand). No viajan ni se guardan.</div>
+    <div class="wnote" style="left:585px;width:430px"><b>Modo sin IA</b>Después de cargar la página, nada sale del navegador.</div>
+    <div class="wnote" style="left:1050px;width:430px"><b>Nunca llega al navegador</b>La clave de Google: solo existe en Vercel.</div>
+  </section>
+
+  <!-- E · Modelo de datos -->
+  <section class="scene" id="s-data">
+    <h2 class="title">Modelo de datos</h2>
+    <svg width="1600" height="900" style="position:absolute;left:0;top:0" role="img" aria-labelledby="d-t">
+      <title id="d-t">Entidades Report, Incident y Category en memoria; Building y Protocol fijos en el código; y sus referencias</title>
+      <defs>
+        <marker id="d-arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#51607A"/></marker>
+      </defs>
+      <rect class="frag" x="64" y="150" width="1040" height="500" rx="8"/>
+      <text class="card-t" x="64" y="140">Estado en memoria (Zustand)</text>
+      <rect class="frag" x="1144" y="150" width="400" height="500" rx="8" style="stroke-dasharray:7 6"/>
+      <text class="card-t" x="1144" y="140">Datos fijos en el código</text>
+      <path class="rel" d="M386 500H436V260H486" marker-end="url(#d-arr)"/>
+      <path class="rel" d="M826 380H856V260H886" marker-end="url(#d-arr)"/>
+      <path class="rel" d="M826 440H1146V480H1186" marker-end="url(#d-arr)"/>
+      <path class="rel" d="M96 320H78V172H1346V200" marker-end="url(#d-arr)"/>
+      <path class="rel" d="M826 320H842V172"/>
+      <circle cx="842" cy="172" r="3.5" fill="#51607A"/>
+      <path class="rel" d="M826 560H846V638H656V621" marker-end="url(#d-arr)"/>
+      <text class="relt" x="392" y="492">N</text><text class="relt" x="448" y="252">0..1</text>
+      <text class="relt" x="832" y="372">N</text><text class="relt" x="866" y="252">1</text>
+      <text class="relt" x="832" y="432">N</text><text class="relt" x="1168" y="472">1</text>
+      <text class="relt" x="84" y="312">N</text><text class="relt" x="832" y="312">N</text><text class="relt" x="1354" y="194">1</text>
+      <text class="relt" x="856" y="604">0..1 relacionado con</text>
+    </svg>
+    <div class="ent" style="left:96px;top:200px;width:290px">
+      <div class="hd"><b>Report</b><span>aviso</span></div>
+      <div class="row"><code class="pk"># id</code><span>texto</span></div>
+      <div class="row"><code>seq</code><span>orden en la cola</span></div>
+      <div class="row"><code class="fk">→ buildingId</code><span>Building</span></div>
+      <div class="row"><code>floor</code><span>entero; negativo = sótano</span></div>
+      <div class="row"><code>text</code><span>1 a 500 caracteres</span></div>
+      <div class="row"><code>createdAt</code><span>hora</span></div>
+      <div class="row"><code>status</code><span>4 estados</span></div>
+      <div class="row"><code>errorKind</code><span>tipo de error o null</span></div>
+      <div class="row"><code class="fk">→ incidentId</code><span>Incident o null</span></div>
+      <div class="row"><code>scriptKey</code><span>S1 a S9 o null</span></div>
+    </div>
+    <div class="ent root" style="left:486px;top:200px;width:340px">
+      <div class="hd"><b>Incident</b><span>incidente</span></div>
+      <div class="row"><code class="pk"># id</code><span>texto</span></div>
+      <div class="row"><code>number</code><span>INC-n</span></div>
+      <div class="row"><code class="fk">→ buildingId</code><span>Building</span></div>
+      <div class="row"><code>floor</code><span>la del primer aviso</span></div>
+      <div class="row"><code class="fk">→ categoryId</code><span>Category</span></div>
+      <div class="row"><code>severity</code><span>baja a crítica</span></div>
+      <div class="row"><code class="fk">→ protocolId</code><span>Protocol</span></div>
+      <div class="row"><code>summary</code><span>hasta 300</span></div>
+      <div class="row"><code>rationale</code><span>hasta 200</span></div>
+      <div class="row"><code>state</code><span>pendiente, validado, descartado</span></div>
+      <div class="row"><code class="fk">→ relatedIncidentId</code><span>Incident o null</span></div>
+      <div class="row"><code>locks</code><span>campos editados a mano</span></div>
+    </div>
+    <div class="ent" style="left:886px;top:200px;width:200px">
+      <div class="hd"><b>Category</b></div>
+      <div class="row"><code class="pk"># id</code><span>texto</span></div>
+      <div class="row"><code>name</code><span>hasta 40</span></div>
+      <div class="row"><code>official</code><span>sí o no</span></div>
+    </div>
+    <div class="ent fixed" style="left:1186px;top:200px;width:320px">
+      <div class="hd"><b>Building</b><span>3 edificios</span></div>
+      <div class="row"><code class="pk"># id</code><span>torre-central…</span></div>
+      <div class="row"><code>name</code><span>texto</span></div>
+      <div class="row"><code>floors</code><span>lista de plantas</span></div>
+    </div>
+    <div class="ent fixed" style="left:1186px;top:420px;width:320px">
+      <div class="hd"><b>Protocol</b><span>5 protocolos</span></div>
+      <div class="row"><code class="pk"># id</code><span>evac-plan…</span></div>
+      <div class="row"><code>title</code><span>texto</span></div>
+      <div class="row"><code>textByBuilding</code><span>un texto por edificio</span></div>
+    </div>
+    <div class="ernote"><b>No es una base de datos.</b> Son tres colecciones en memoria indexadas por <code>id</code>. La relación aviso → incidente solo se guarda en el aviso (<code>incidentId</code>). Dos contadores, <code>nextSeq</code> y <code>nextIncidentNumber</code>, dan el orden y el número INC-n. Al recargar, todo se vacía.<br><b>#</b> identificador &nbsp; <b>→</b> apunta a otra entidad &nbsp; <b>N, 1, 0..1</b> cuántos de cada lado</div>
+    <div class="ernote" style="left:1144px;width:400px">Edificios y protocolos son constantes: no cambian durante la demo. Los textos de protocolo son ficticios.</div>
+  </section>
+
+  <!-- F · Traductor -->
   <section class="scene" id="s-dict">
     <h2 class="title">Traductor de tecnologías</h2>
     <div class="filters" data-ix="1">Dónde se ejecuta:
@@ -558,10 +749,44 @@ table.tr td.name code { font-family: Consolas, ui-monospace, monospace; font-wei
         frase: 'La IA está en medio de un recorrido con controles antes y después.',
         q: '¿Qué pasa si Gemini falla?', a: 'El servidor clasifica el error (tiempo agotado, demasiadas peticiones, respuesta no válida) y lo devuelve sin romper nada. El aviso queda marcado con el error y un botón «Reintentar», y la cola sigue con el siguiente. Además está el modo sin IA.',
       } },
-    { id: 's-dict', name: 'C. Traductor de tecnologías', steps: () => 0,
+    { id: 's-ai', name: 'C. Qué ve la IA y cómo se controla', steps: () => 5,
+      show(step) {
+        $$('#s-ai .gate').forEach((g, i) => { g.classList.toggle('vis', i < step); g.classList.toggle('cur', i === step - 1) })
+      },
+      notes: {
+        t: 'C. Qué ve la IA y cómo se controla',
+        ocurre: 'A la izquierda, lo único que recibe la IA: instrucciones fijas, el aviso nuevo entre etiquetas y el estado de su edificio con alias. A la derecha, los cinco controles que atraviesa su propuesta antes de llegar al tablero. Un clic por control.',
+        piezas: 'Los controles 1 a 3 los hace el servidor en Vercel: formato, coherencia entre campos y referencias. El 4 son las reglas de negocio en el navegador. El 5 es la persona. La IA nunca escribe directamente en el estado.',
+        oral: 'Empieza por la izquierda: «limito lo que ve». Luego un clic por control: «y no me fío de lo que devuelve». Para en el 3: «si inventa un incidente, no se une a nada; crea uno nuevo». Cierra con el 5: «decide una persona».',
+        frase: 'La IA solo ve lo necesario y solo puede responder dentro de un formato; el código y la persona deciden.',
+        q: '¿Cómo evitas que la IA alucine?', a: 'No puedo impedir que se equivoque, pero sí limitar el daño. Solo ve su edificio y usa alias; si inventa una referencia se rechaza o se crea un incidente nuevo; las reglas no dejan unir avisos de otra planta ni bajar la gravedad; y una persona valida. Lo que sigue dependiendo de la IA es si dos avisos describen el mismo suceso y el texto del resumen.',
+      } },
+    { id: 's-wire', name: 'D. Cómo viaja la información', steps: () => 6,
+      show(step) {
+        $$('#s-wire .msg').forEach((m, i) => { m.classList.toggle('dim', i >= step); m.classList.toggle('cur', i === step - 1) })
+      },
+      notes: {
+        t: 'D. Cómo viaja la información',
+        ocurre: 'Dos momentos. Al abrir la página, el navegador pide la web y Vercel devuelve el HTML ya pintado (SSR) con el JavaScript y el CSS. Después, por cada aviso, el navegador llama a la Server Function con un POST en JSON; el servidor llama a Gemini con otro POST en JSON; y las respuestas vuelven en JSON.',
+        piezas: 'Navegador a Vercel: JSON serializado por TanStack Start (seroval), solo desde el mismo origen. Vercel a Google: JSON con la clave en una cabecera y el formato de respuesta exigido como JSON Schema. Dentro del navegador no hay transporte: son objetos en memoria.',
+        oral: 'Un clic por mensaje. Señala que la clave solo aparece en el tramo Vercel–Google, y que el tramo navegador–Vercel no la lleva nunca.',
+        frase: 'Todo viaja en JSON por HTTPS; la clave solo existe en el tramo entre Vercel y Google.',
+        q: '¿Por qué no una API REST propia?', a: 'TanStack Start genera ese endpoint por mí: la Server Function se llama desde el navegador como una función normal y el framework hace el POST y la serialización. Para integrarlo con otros sistemas sí publicaría una API explícita.',
+      } },
+    { id: 's-data', name: 'E. Modelo de datos', steps: () => 0,
       show() {},
       notes: {
-        t: 'C. Traductor de tecnologías',
+        t: 'E. Modelo de datos',
+        ocurre: 'Cinco entidades. Avisos, incidentes y categorías viven en memoria y cambian durante la demo. Edificios y protocolos son datos fijos en el código.',
+        piezas: 'Un aviso apunta a un incidente o a ninguno (si está en cola o ha fallado). Un incidente apunta a su categoría, su protocolo, su edificio y, opcionalmente, a otro incidente relacionado. La relación aviso a incidente solo se guarda en el aviso.',
+        oral: 'Señala Incident en el centro: «es la pieza que construye la IA». Luego la flecha desde Report: «un incidente agrupa varios avisos».',
+        frase: 'Es un modelo relacional pequeño, pero guardado en memoria: con una base de datos real, estas serían las tablas.',
+        q: '¿Cómo lo pasarías a una base de datos?', a: 'Casi uno a uno: una tabla por entidad, con las mismas claves. Edificios y protocolos vendrían de Pangea. Habría que añadir el operador que valida y la fecha de cada cambio, para tener historial.',
+      } },
+    { id: 's-dict', name: 'F. Traductor de tecnologías', steps: () => 0,
+      show() {},
+      notes: {
+        t: 'F. Traductor de tecnologías',
         ocurre: 'Cada tecnología con lo que es y su papel aquí. La columna «Qué es» evita confundir el framework, la librería, la plataforma y el modelo.',
         piezas: 'Usa el filtro: «Navegador» enseña lo que corre en la pantalla del operador; «Vercel», lo que corre en el servidor; «Google», solo el modelo.',
         oral: 'No recorras la tabla entera: búscala cuando te pregunten por un nombre concreto.',
@@ -682,6 +907,8 @@ table.tr td.name code { font-family: Consolas, ui-monospace, monospace; font-wei
     ['¿Qué hace exactamente Vercel AI SDK?', 'Me da una forma estándar de llamar a modelos de IA. Le paso el modelo, las instrucciones y el formato de respuesta que espero, y me devuelve un objeto ya comprobado contra ese formato. @ai-sdk/google es su adaptador para Gemini: cambiar de proveedor sería cambiar ese adaptador.'],
     ['¿Qué sucede si Gemini falla?', 'El servidor clasifica el error (tiempo agotado, demasiadas peticiones, respuesta no válida) y lo devuelve sin romper nada. El aviso queda marcado con el error y un botón «Reintentar»; la cola sigue con el siguiente. No hay reintentos automáticos, y existe el modo sin IA.'],
     ['¿Cómo se valida la respuesta de Gemini?', 'En tres capas. El SDK comprueba que tiene el formato esperado. El servidor revisa las reglas entre campos y solo acepta incidentes, categorías y protocolos que existen. Y en el navegador las reglas de negocio deciden qué se aplica al tablero.'],
+    ['¿Cómo controlas las alucinaciones?', 'Limitando lo que ve (solo su edificio, con alias) y lo que puede responder (un formato fijo). El servidor rechaza referencias inventadas, las reglas del navegador impiden uniones imposibles y una persona valida cada incidente.'],
+    ['¿Qué formato tienen los datos que viajan?', 'JSON por HTTPS en los dos tramos. Del navegador al servidor lo serializa TanStack Start; del servidor a Gemini lo prepara el AI SDK, con el formato de respuesta como JSON Schema. Dentro del navegador son objetos en memoria.'],
     ['¿Usáis Vercel AI Gateway?', 'No. Se valoró durante el desarrollo, pero la versión actual se conecta directamente a Gemini con @ai-sdk/google.'],
     ['¿Qué hace Vercel?', 'Es el alojamiento: publica la aplicación en una dirección pública, sirve los archivos de la web y ejecuta la función del servidor. Ahí se configuran las variables secretas.'],
   ]
