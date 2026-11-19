@@ -99,9 +99,6 @@ export function IncidentCard({ incident }: { incident: Incident }) {
           </p>
         </div>
         <div className="flex flex-col gap-1">
-          <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
-            Texto generado por IA
-          </p>
           <p>
             {incident.summary} <LockIcon locked={incident.locks.summary} />
           </p>
@@ -126,9 +123,9 @@ export function IncidentCard({ incident }: { incident: Incident }) {
             >
               <ShieldCheck /> Validar
             </Button>
-            <Button
+          <Button
               size="sm"
-              variant="ghost"
+              variant="destructive"
               disabled={running}
               onClick={() => triageActions.discardIncident(incident.id)}
             >

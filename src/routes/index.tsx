@@ -21,7 +21,6 @@ function Home() {
           <h1 className="text-lg font-semibold">EmergencyTriage</h1>
         </div>
         <div className="flex items-center gap-2">
-          <Badge variant="outline">Demo con datos ficticios</Badge>
           <Badge variant={mode === 'llm' ? 'default' : 'secondary'} data-testid="mode-badge">
             Modo: {mode === 'llm' ? 'IA' : 'Sin API'}
           </Badge>
