@@ -197,6 +197,27 @@ table.tr td.name code { font-family: Consolas, ui-monospace, monospace; font-wei
 .ernote { position: absolute; left: 80px; top: 680px; width: 1040px; font-size: 18px; line-height: 1.45; color: var(--ink2); cursor: default; }
 .ernote b { color: var(--ink); }
 
+/* Próximos pasos: coste */
+.calc { position: absolute; left: 96px; top: 196px; width: 700px; background: #fff; border: 1.5px solid var(--edge); border-radius: 6px; padding: 26px 30px 28px; cursor: default; }
+.calc h3, .cost h3 { margin: 0; display: flex; align-items: center; gap: 10px; font-family: "Barlow Condensed", sans-serif; font-weight: 700; font-size: 30px; }
+.calc h3 svg.i, .cost h3 svg.i { color: var(--blue); }
+.calc label { display: flex; flex-direction: column; gap: 6px; font-size: 18px; font-weight: 600; color: var(--ink2); }
+.calc label b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.calc input[type=range] { width: 100%; accent-color: var(--blue); cursor: pointer; }
+.calc input[type=number] { font: inherit; font-size: 20px; color: var(--ink); padding: 8px 12px; border: 1.5px solid var(--line); border-radius: 6px; width: 100%; }
+.calc input:focus-visible { outline: 3px solid #9DB4E3; outline-offset: 1px; }
+.calc .pr { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 20px; }
+.calc .src { margin: 14px 0 0; font-size: 16px; color: var(--ink2); line-height: 1.4; }
+.kpis { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 22px; border-top: 2px solid var(--line); }
+.kpi { padding: 14px 10px 0 0; }
+.kpi .v { font-family: "Barlow Condensed", sans-serif; font-weight: 700; font-size: 32px; color: var(--blue); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.kpi .l { font-size: 15px; color: var(--ink2); }
+.cost { position: absolute; left: 836px; width: 668px; background: #fff; border: 1.5px solid var(--edge); border-radius: 6px; padding: 22px 28px; cursor: default; }
+.cost ul { list-style: none; margin: 12px 0 0; padding: 0; }
+.cost li { display: grid; grid-template-columns: 28px 1fr; gap: 12px; padding: 8px 0; font-size: 18px; line-height: 1.4; }
+.cost li svg.i { color: var(--blue); font-size: 22px; margin-top: 2px; }
+.cost code { font-size: 15px; background: #F1F4F9; border-radius: 4px; padding: 1px 6px; }
+
 /* Barra inferior */
 .bar { position: absolute; left: 0; right: 0; bottom: 0; height: 46px; display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 0 24px; font-size: 16px; color: var(--ink2); cursor: default; }
 .prog { position: absolute; left: 0; bottom: 0; height: 4px; width: 0; background: var(--blue); transition: width .4s; }
@@ -239,6 +260,11 @@ table.tr td.name code { font-family: Consolas, ui-monospace, monospace; font-wei
     <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 3v4M17 5h4"/></symbol>
     <symbol id="i-lock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
     <symbol id="i-nodb" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.7 4 3 9 3s9-1.3 9-3V5"/><path d="M2 2l20 20"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></symbol>
+    <symbol id="i-gauge" viewBox="0 0 24 24"><path d="M12 14l4-4"/><path d="M3.3 19a10 10 0 1 1 17.4 0"/></symbol>
+    <symbol id="i-coins" viewBox="0 0 24 24"><circle cx="8" cy="8" r="6"/><path d="M18.1 10.4A6 6 0 1 1 10.3 18"/><path d="M7 6h1v4"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></symbol>
+    <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9z"/></symbol>
     <symbol id="i-phone" viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></symbol>
   </defs>
 </svg>
@@ -528,6 +554,45 @@ table.tr td.name code { font-family: Consolas, ui-monospace, monospace; font-wei
     </table>
   </section>
 
+  <!-- Próximos pasos: coste -->
+  <section class="scene" id="s-cost">
+    <h2 class="title">Saber cuánto cuesta cada aviso, y ponerle límite</h2>
+    <div style="position:absolute;left:96px;top:128px;display:flex;gap:14px;align-items:center"><span class="prop">Propuesta</span><span style="font-size:19px;color:#51607A">Próximos pasos. La calculadora usa precios de ejemplo.</span></div>
+    <div class="calc" data-ix="1">
+      <h3><svg class="i"><use href="#i-coins"/></svg>Calculadora de coste</h3>
+      <label style="margin-top:18px"><span>Avisos al día: <b id="cAvisosLbl"></b></span>
+        <input type="range" id="cAvisos" min="10" max="5000" step="10" value="500" aria-label="Avisos al día">
+      </label>
+      <div class="pr">
+        <label>€ por millón de tokens de entrada<input type="number" id="cIn" min="0" step="0.01" value="0.10"></label>
+        <label>€ por millón de tokens de salida<input type="number" id="cOut" min="0" step="0.01" value="0.40"></label>
+      </div>
+      <p class="src">Consumo medido por aviso en la demo: unos 1.400 tokens de entrada y 120 de salida.</p>
+      <div class="kpis">
+        <div class="kpi"><div class="v" id="kAviso"></div><div class="l">por aviso</div></div>
+        <div class="kpi"><div class="v" id="kRafaga"></div><div class="l">por ráfaga de 9</div></div>
+        <div class="kpi"><div class="v" id="kDia"></div><div class="l">al día</div></div>
+        <div class="kpi"><div class="v" id="kMes"></div><div class="l">al mes (30 días)</div></div>
+      </div>
+    </div>
+    <div class="cost" style="top:196px">
+      <h3><svg class="i"><use href="#i-chart"/></svg>Ver el coste</h3>
+      <ul>
+        <li><svg class="i"><use href="#i-coins"/></svg><span>Coste en € de cada aviso y de cada incidente, visible en su tarjeta.</span></li>
+        <li><svg class="i"><use href="#i-chart"/></svg><span>Un resumen de gasto por día y por edificio.</span></li>
+      </ul>
+    </div>
+    <div class="cost" style="top:400px">
+      <h3><svg class="i"><use href="#i-gauge"/></svg>Ponerle límites</h3>
+      <ul>
+        <li><svg class="i"><use href="#i-gauge"/></svg><span>Configurable con variables: <code>PRESUPUESTO_DIARIO_EUR</code>, <code>MAX_TOKENS_POR_AVISO</code>, <code>MAX_AVISOS_POR_USUARIO_HORA</code>.</span></li>
+        <li><svg class="i"><use href="#i-alert"/></svg><span>Alerta al operador al llegar al 80 % del presupuesto.</span></li>
+        <li><svg class="i"><use href="#i-bolt"/></svg><span>Al agotarlo, pasa solo al modo sin IA: la consola sigue funcionando.</span></li>
+        <li><svg class="i"><use href="#i-spark"/></svg><span>Un modelo más económico para los avisos sencillos.</span></li>
+      </ul>
+    </div>
+  </section>
+
   <!-- D · Futuro -->
   <section class="scene" id="s-future">
     <h2 class="title">Posibles integraciones futuras</h2>
@@ -793,6 +858,16 @@ table.tr td.name code { font-family: Consolas, ui-monospace, monospace; font-wei
         frase: 'El AI SDK es la herramienta; @ai-sdk/google, el adaptador; Gemini, el modelo; Vercel, el alojamiento.',
         q: '¿Qué diferencia hay entre Vercel AI SDK y Gemini?', a: 'El AI SDK es la herramienta que uso para comunicarme con modelos de IA. Gemini es el modelo concreto al que envío las peticiones. El paquete @ai-sdk/google conecta los dos.',
       } },
+    { id: 's-cost', name: 'Próximos pasos: coste bajo control', steps: () => 0,
+      show() { renderCalc() },
+      notes: {
+        t: 'Próximos pasos: coste bajo control',
+        ocurre: 'Una propuesta, no implementada. El coste de la IA se mide en tokens (trozos de texto). Cada aviso consume unos 1.200 a 1.500 de entrada y unos 120 de salida: cifras medidas en la demo.',
+        piezas: 'La calculadora multiplica esos tokens por el precio que escribas. Los precios son de ejemplo: se ajustan a la tarifa real del proveedor.',
+        oral: 'Mueve el control de avisos al día para enseñar que el coste crece en línea recta y sigue siendo bajo. Luego la columna derecha: ver el coste y ponerle límite.',
+        frase: 'Cada aviso cuesta una fracción de céntimo, y aun así lo limitaría con un presupuesto diario y el paso automático al modo sin IA.',
+        q: '¿Qué pasa si se dispara el gasto?', a: 'Propondría un presupuesto diario, un máximo por aviso y por usuario, una alerta al 80 % y, al agotarlo, el paso automático al modo sin IA. Hoy solo existe el límite de 20 peticiones por minuto en el servidor y el máximo de 800 tokens de salida.',
+      } },
     { id: 's-future', name: 'Posibles integraciones futuras', steps: () => 0,
       show() {},
       notes: {
@@ -831,6 +906,25 @@ table.tr td.name code { font-family: Consolas, ui-monospace, monospace; font-wei
     const f = b.dataset.f
     $$('#dict tr').forEach((tr) => tr.classList.toggle('dim', f !== 'all' && !tr.dataset.w.split(' ').includes(f)))
   })
+
+  // Calculadora de coste (precios de ejemplo; consumo medido en la demo)
+  const TOK_IN = 1400, TOK_OUT = 120
+  const eur = (v) => {
+    const digits = v < 0.01 ? 5 : v < 1 ? 4 : 2
+    return v.toLocaleString('es-ES', { minimumFractionDigits: digits, maximumFractionDigits: digits }) + ' €'
+  }
+  function renderCalc() {
+    const avisos = Number($('#cAvisos').value)
+    const pin = Math.max(0, Number($('#cIn').value) || 0)
+    const pout = Math.max(0, Number($('#cOut').value) || 0)
+    const perAviso = (TOK_IN * pin + TOK_OUT * pout) / 1e6
+    $('#cAvisosLbl').textContent = avisos.toLocaleString('es-ES')
+    $('#kAviso').textContent = eur(perAviso)
+    $('#kRafaga').textContent = eur(perAviso * 9)
+    $('#kDia').textContent = eur(perAviso * avisos)
+    $('#kMes').textContent = eur(perAviso * avisos * 30)
+  }
+  ;['#cAvisos', '#cIn', '#cOut'].forEach((id) => $(id).addEventListener('input', renderCalc))
 
   // Cambio de ruta (escena B)
   $$('.seg button').forEach((b) => b.addEventListener('click', () => {
@@ -939,6 +1033,7 @@ table.tr td.name code { font-family: Consolas, ui-monospace, monospace; font-wei
   addEventListener('keydown', (e) => {
     if (e.altKey || e.ctrlKey || e.metaKey) return
     if (e.target.closest && e.target.closest('summary, button') && (e.key === ' ' || e.key === 'Enter')) return
+    if (e.target.closest && e.target.closest('input')) return // las flechas mueven el control, no la escena
     const k = e.key
     if (k === 'Escape') closeSheet()
     else if (k === 'ArrowRight' || k === 'PageDown' || k === ' ') { e.preventDefault(); next() }
