@@ -1,11 +1,19 @@
 # EmergencyTriage
 
-Prototipo de consola de operaciones para incidentes en edificios. Recibe avisos de texto libre, usa una IA para proponer cómo agruparlos en incidentes (categoría, gravedad, protocolo y resumen) y deja que una persona responsable de seguridad **valide, corrija o descarte** cada incidente.
+**«Huele a humo», «hay una niebla gris», «olor a quemado junto a la escalera»: tres personas, un mismo incendio. EmergencyTriage lo detecta y convierte la avalancha de avisos en incidentes clasificados y priorizados, en segundos.**
 
-> **Demo con datos ficticios. No es un sistema real de gestión de emergencias.** Los edificios, los protocolos y sus textos («[FICTICIO]») son inventados y no tienen validez operativa. La aplicación no ejecuta protocolos ni envía notificaciones.
+Consola full-stack, construida en 2 días, donde una IA propone cómo agrupar avisos de texto libre en incidentes (categoría, gravedad, protocolo y resumen) y una persona responsable **valida, corrige o descarta** cada propuesta. La IA nunca decide sola: su respuesta pasa por **5 capas de control** antes de llegar al tablero.
 
-- **URL pública:** https://emergency-triage-phi.vercel.app
-- **Diseño completo:** [`docs/designs/emergency_triage.md`](docs/designs/emergency_triage.md)
+| | |
+|---|---|
+| **Pruébalo** | [emergency-triage-phi.vercel.app](https://emergency-triage-phi.vercel.app). Pulsa «Simular ráfaga» en el modo sin API: 9 avisos, 5 incidentes. |
+| **Presentación** | [Ver en el navegador](https://miguelpuchalt.github.io/fusuma-test/presentacion.html). El problema, la solución y la demo en 14 diapositivas. |
+| **Arquitectura** | [Ver en el navegador](https://miguelpuchalt.github.io/fusuma-test/arquitectura-emergencytriage.html). Recorrido interactivo: piezas, viaje de un aviso, control de la IA, transporte y modelo de datos. |
+| **Diseño completo** | [`docs/designs/emergency_triage.md`](docs/designs/emergency_triage.md) |
+
+**En cifras:** React 19 + TypeScript + TanStack Start (SSR) + Vercel AI SDK + Gemini · salida del LLM validada con esquemas Zod · reglas de negocio desacopladas de la interfaz · **147 tests automáticos** · modo sin IA para que la demo funcione aunque la IA no responda · coste 0 €.
+
+> Demo con datos ficticios: no es un sistema real de gestión de emergencias. Edificios y protocolos («[FICTICIO]») son inventados; la aplicación no ejecuta protocolos ni envía notificaciones.
 
 ## Stack
 
