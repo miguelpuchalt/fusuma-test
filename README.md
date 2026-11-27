@@ -2,7 +2,7 @@
 
 **«Huele a humo», «hay una niebla gris», «olor a quemado junto a la escalera»: tres personas, un mismo incendio. EmergencyTriage lo detecta y convierte la avalancha de avisos en incidentes clasificados y priorizados, en segundos.**
 
-Consola full-stack, construida en 2 días, donde una IA propone cómo agrupar avisos de texto libre en incidentes (categoría, gravedad, protocolo y resumen) y una persona responsable **valida, corrige o descarta** cada propuesta. La IA nunca decide sola: su respuesta pasa por **5 capas de control** antes de llegar al tablero.
+Plataforma full-stack, inspirada en Jira/Trello, donde una IA propone cómo agrupar avisos de texto libre en incidentes (categoría, gravedad, protocolo y resumen) y una persona responsable **valida, corrige o descarta** cada propuesta. La IA nunca decide sola: su respuesta pasa por **5 capas de control** antes de llegar al tablero.
 
 | | |
 |---|---|
